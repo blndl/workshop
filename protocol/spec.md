@@ -262,9 +262,10 @@ accept: update last ctr, reset watchdog, pass fields to the state machine
 | Hub restarts (sessions lost) | The hub drops the node's messages as `unknown_session`. The node notices through the downlink keepalive (below) and starts a new session. |
 | No `WELCOME` arrives | The node keeps resending `HELLO` every 2 s (rule 1). |
 
-**Downlink keepalive:** the hub sends `CMD id=0` (no action) every 5 s to
-each node with a current session, and the node answers with an `ACK` as
-usual. If a node gets no valid `down` message for 10 s, it drops its
+**Downlink keepalive:** the hub sends `CMD id=0` every 5 s to each node
+with a current session, and the node answers with an `ACK` as usual. The
+keepalive repeats the current outputs (e.g. `id=0,buzzer=1,led=alarm`), so a
+lost command is corrected within 5 s. If a node gets no valid `down` message for 10 s, it drops its
 session and sends a new `HELLO`. This way, a node recovers from a hub
 restart within about 10 s.
 

@@ -1,6 +1,28 @@
-# The hub reads everything and writes downlinks.
+# alarm-core ("hub"): talks to the nodes, takes control requests, publishes
+# state and events for the other services.
 user hub
 topic readwrite alarm/v1/#
+topic read alarm/control
+topic write alarm/events
+topic write alarm/state
+topic read alarm/snapshots
+
+# Control client (dev CLI now, the API service later).
+user ctl
+topic write alarm/control
+topic read alarm/events
+topic read alarm/state
+
+# Camera service: follows the alarm, announces each picture it stores.
+user camera
+topic read alarm/events
+topic read alarm/state
+topic write alarm/snapshots
+
+# Notifier: follows the alarm, sends phone alerts.
+user notifier
+topic read alarm/events
+topic read alarm/state
 
 # DEV ONLY: simulates an attacker who sniffed broker credentials off the
 # Wi-Fi (MQTT is plain TCP). Remove this block on a real deployment.

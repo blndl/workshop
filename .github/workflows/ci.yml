@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e protocol/python -e 'simulator[dev]'
+        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]'
       - name: Protocol tests
         run: pytest -q protocol/python
       - name: Test vectors are up to date
@@ -24,3 +24,9 @@ jobs:
         run: pytest -q simulator
       - name: Scenarios
         run: python -m alarm_sim selftest
+      - name: alarm-core tests
+        run: pytest -q services/alarm-core
+      - name: camera tests
+        run: pytest -q services/camera
+      - name: notifier tests
+        run: pytest -q services/notifier

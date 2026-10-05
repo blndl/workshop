@@ -23,7 +23,7 @@ from . import scenario as scenario_mod
 from .attacks import ATTACKS, Attacker
 from .devhub import DevHub
 from .node import SENSORS, SimNode
-from .transport import MemoryBus, MqttTransport
+from alarm_protocol.transport import MemoryBus, MqttTransport
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_SECRETS = REPO / ".secrets" / "dev.json"

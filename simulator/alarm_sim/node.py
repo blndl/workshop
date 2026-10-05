@@ -193,8 +193,8 @@ class SimNode:
 
     def _handle_cmd(self, fields: dict[str, str]) -> None:
         cmd_id = fields.get("id", "0")
-        applied = {k: v for k, v in fields.items() if k in self.outputs}
-        self.outputs.update(applied)
-        if applied:
-            self.log(f"[{self.node_id}] command {applied}")
+        changed = {k: v for k, v in fields.items() if k in self.outputs and self.outputs[k] != v}
+        self.outputs.update(changed)
+        if changed:
+            self.log(f"[{self.node_id}] outputs changed {changed}")
         self._send_sealed("ACK", {"id": cmd_id, "ok": "1"})

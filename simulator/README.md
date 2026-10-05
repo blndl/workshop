@@ -6,9 +6,8 @@ Fake ESP8266 sensor nodes that speak [protocol v1](../protocol/spec.md) over MQT
 alarm_sim/
   node.py       simulated node: handshake, heartbeats, events, commands, jamming/reboot
   attacks.py    replay, spoofing, tampering, forged HELLO, injected CMD, flooding
-  devhub.py     minimal hub (prints what it sees); alarm-core will replace it
+  devhub.py     minimal hub that only prints what it sees (alarm-core is the real one)
   scenario.py   YAML timeline runner and expectation checks
-  transport.py  real MQTT client + in-memory bus for tests
 scenarios/      intrusion, cat, lid_tamper, jamming, replay_attack, spoofing, session_attacks
 ```
 
@@ -41,7 +40,7 @@ docker compose -f infra/docker/compose.dev.yml up -d     # Mosquitto on 127.0.0.
 Then, in two terminals:
 
 ```bash
-.venv/bin/python -m alarm_sim hub                        # terminal 1: dev hub
+.venv/bin/python -m alarm_sim hub                        # terminal 1: dev hub (or alarm_core run)
 .venv/bin/python -m alarm_sim node                       # terminal 2: interactive node
 ```
 

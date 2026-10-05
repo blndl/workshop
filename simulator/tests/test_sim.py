@@ -8,7 +8,7 @@ from alarm_sim.__main__ import FakeClock, main
 from alarm_sim.attacks import Attacker
 from alarm_sim.devhub import DevHub
 from alarm_sim.node import SimNode
-from alarm_sim.transport import MemoryBus, topic_matches
+from alarm_protocol.transport import MemoryBus, topic_matches
 
 SCENARIOS = sorted((Path(__file__).resolve().parents[1] / "scenarios").glob("*.yaml"))
 KEY = bytes(range(32))

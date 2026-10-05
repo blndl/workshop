@@ -1,0 +1,23 @@
+[project]
+name = "alarm-camera"
+version = "0.1.0"
+description = "Snapshot service for the alarm"
+requires-python = ">=3.11"
+dependencies = ["alarm-protocol[mqtt]"]
+
+[project.optional-dependencies]
+webcam = ["opencv-python-headless>=4.8", "numpy"]
+dev = ["pytest", "alarm-core", "alarm-sim"]
+
+[project.scripts]
+alarm-camera = "alarm_camera.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["alarm_camera"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

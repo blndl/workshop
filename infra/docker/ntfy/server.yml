@@ -1,0 +1,21 @@
+# ntfy server for phone alerts. base-url comes from NTFY_BASE_URL (set by
+# scripts/dev-ntfy.sh) because attachment links must be reachable by the phone.
+listen-http: ":80"
+
+# Access control: nothing is allowed unless granted (scripts/dev-ntfy.sh).
+auth-file: /var/lib/ntfy/user.db
+auth-default-access: deny-all
+enable-login: true
+
+# Messages are kept 12 h so a phone that was offline catches up.
+cache-file: /var/cache/ntfy/cache.db
+cache-duration: 12h
+
+# Snapshot attachments: deleted after 3 h (the originals stay on the Pi).
+attachment-cache-dir: /var/cache/ntfy/attachments
+attachment-file-size-limit: 5M
+attachment-expiry-duration: 3h
+
+# iPhone push: only a wake-up signal goes through ntfy.sh; the phone then
+# fetches the message and photo from this server.
+upstream-base-url: https://ntfy.sh
