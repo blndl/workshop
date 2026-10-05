@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e protocol/python -e 'simulator[dev]'
+      - name: Protocol tests
+        run: pytest -q protocol/python
+      - name: Test vectors are up to date
+        run: |
+          cd protocol/python && python gen_vectors.py
+          git diff --exit-code ../test-vectors.json
+      - name: Simulator tests
+        run: pytest -q simulator
+      - name: Scenarios
+        run: python -m alarm_sim selftest

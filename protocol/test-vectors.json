@@ -1,0 +1,44 @@
+{
+  "inputs": {
+    "master_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "node": "door-1",
+    "nn_hex": "000102030405060708090a0b0c0d0e0f",
+    "pn_hex": "101112131415161718191a1b1c1d1e1f"
+  },
+  "derived": {
+    "k_hello_hex": "61df12f1c1653842616ce4f67b629a83ab3086e6636ec0cf3a62c996911c981e",
+    "sid": "10111213",
+    "k_up_hex": "2e966dd465d4d17683a400b7f573fb18ac6a5694aaf7e1bba11c56417d17ce0e",
+    "k_down_hex": "0a1560a4a346d5c463a01a46fb28d501319b221e26637f2b62101b277bbbe299"
+  },
+  "messages": [
+    {
+      "topic": "alarm/v1/door-1/up",
+      "payload": "v1|HELLO|-|0|fw=0.1.0,nn=AAECAwQFBgcICQoLDA0ODw|1b2b30b8410c6d8001217a3c8825405d"
+    },
+    {
+      "topic": "alarm/v1/door-1/down",
+      "payload": "v1|WELCOME|-|0|nn=AAECAwQFBgcICQoLDA0ODw,pn=EBESExQVFhcYGRobHB0eHw|3818375753785fc7bcdd54de92407b58"
+    },
+    {
+      "topic": "alarm/v1/door-1/up",
+      "plaintext": "door=0,pir=0,lid=0,up=12,rssi=-61",
+      "payload": "v1|HB|10111213|1|oALahjO4zeyg3Rvod23hpqL44EINSGiNBYCP7ypP0xRAiP_Ai2_q2apyL1x5hHpisQ"
+    },
+    {
+      "topic": "alarm/v1/door-1/up",
+      "plaintext": "pir=1",
+      "payload": "v1|EVT|10111213|2|Q5IxZnYtHsNjuOGWGeGTm7SqIVP4"
+    },
+    {
+      "topic": "alarm/v1/door-1/down",
+      "plaintext": "id=1,buzzer=1",
+      "payload": "v1|CMD|10111213|1|rb45mHg8evKYN5rm6mfoLbx1VH6ymhDBNftoQ_g"
+    },
+    {
+      "topic": "alarm/v1/door-1/up",
+      "plaintext": "id=1,ok=1",
+      "payload": "v1|ACK|10111213|3|xQZeJPtt7AWQISP_kIex_gw_JIf6GGh0WQ"
+    }
+  ]
+}

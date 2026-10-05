@@ -1,0 +1,23 @@
+name: spoofing
+description: Forged, tampered and junk messages in both directions
+duration: 10
+steps:
+  - at: 3
+    say: forge "door closed" without the key
+    attack: spoof
+  - at: 4
+    say: rewrite a captured header
+    attack: tamper
+  - at: 5
+    say: forge a HELLO
+    attack: forge_hello
+  - at: 6
+    say: try to silence the node's buzzer
+    attack: inject_cmd
+  - at: 7
+    attack: flood
+    args: {count: 30}
+expect:
+  hub: [auth_fail, malformed]
+  node: [auth_fail]
+  hub_absent: [replay, link_lost]

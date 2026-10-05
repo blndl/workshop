@@ -1,0 +1,13 @@
+name: jamming
+description: Wi-Fi jammed/deauthed for 6 s; the hub watchdog must notice
+duration: 16
+steps:
+  - at: 4
+    say: attacker starts a deauth flood
+    jam: 6
+  - at: 12
+    say: link is back, intruder already inside
+    set: {pir: 1}
+expect:
+  hub: [link_lost, link_restored, session_started]
+  hub_absent: [auth_fail]

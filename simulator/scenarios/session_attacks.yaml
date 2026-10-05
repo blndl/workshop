@@ -1,0 +1,19 @@
+name: session_attacks
+description: Replays across a reboot, and a replayed HELLO, must not break the link
+duration: 15
+steps:
+  - at: 3
+    say: quick node reboot (a longer one trips LINK_LOST, as it should)
+    reboot: 1
+  - at: 8
+    say: attacker replays a message from before the reboot
+    attack: replay_old
+  - at: 10
+    say: attacker replays the first HELLO to hijack/reset the session
+    attack: replay_hello
+  - at: 12
+    say: door opens; must still be accepted on the current session
+    set: {door: 1}
+expect:
+  hub: [session_started, unknown_session, session_pending]
+  hub_absent: [auth_fail, link_lost]

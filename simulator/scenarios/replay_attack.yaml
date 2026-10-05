@@ -1,0 +1,19 @@
+name: replay_attack
+description: Attacker replays a captured "door closed" while the door is open
+duration: 10
+steps:
+  - at: 2
+    set: {door: 1}
+  - at: 3
+    say: resident closes the door; attacker records this EVT
+    set: {door: 0}
+  - at: 5
+    say: intruder opens the door
+    set: {door: 1}
+  - at: 6
+    say: attacker replays the recorded "door closed"
+    attack: replay
+    args: {type: EVT, index: 1}
+expect:
+  hub: [replay]
+  hub_absent: [auth_fail, link_lost]

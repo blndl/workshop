@@ -1,0 +1,22 @@
+[project]
+name = "alarm-sim"
+version = "0.1.0"
+description = "Simulated sensor nodes, attacks and a dev hub for alarm protocol v1"
+requires-python = ">=3.11"
+dependencies = ["alarm-protocol", "paho-mqtt>=2", "pyyaml>=6"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+alarm-sim = "alarm_sim.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["alarm_sim"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

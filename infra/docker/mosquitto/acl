@@ -1,0 +1,13 @@
+# The hub reads everything and writes downlinks.
+user hub
+topic readwrite alarm/v1/#
+
+# DEV ONLY: simulates an attacker who sniffed broker credentials off the
+# Wi-Fi (MQTT is plain TCP). Remove this block on a real deployment.
+user attacker
+topic readwrite alarm/v1/#
+
+# Each node: write its own uplink and status, read its own downlink.
+pattern write alarm/v1/%u/up
+pattern write alarm/v1/%u/status
+pattern read alarm/v1/%u/down

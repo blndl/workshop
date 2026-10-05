@@ -1,0 +1,16 @@
+name: cat
+description: PIR fires but the door never opens (the detector should veto this)
+duration: 10
+steps:
+  - at: 3
+    say: the cat walks past the PIR
+    set: {pir: 1}
+  - at: 5
+    set: {pir: 0}
+  - at: 7
+    set: {pir: 1}
+  - at: 8
+    set: {pir: 0}
+expect:
+  hub: [msg]
+  hub_absent: [auth_fail, replay, malformed, link_lost]

@@ -1,0 +1,10 @@
+name: lid_tamper
+description: Someone opens the sensor enclosure
+duration: 8
+steps:
+  - at: 3
+    say: enclosure lid opened
+    set: {lid: 1}
+expect:
+  hub: [msg]
+  hub_absent: [auth_fail, link_lost]

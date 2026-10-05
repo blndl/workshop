@@ -1,0 +1,18 @@
+name: intrusion
+description: Someone opens the door and walks in
+duration: 12
+steps:
+  - at: 3
+    say: front door opens
+    set: {door: 1}
+  - at: 4
+    say: motion in the hallway
+    set: {pir: 1}
+  - at: 7
+    set: {pir: 0}
+  - at: 9
+    say: door closes behind them
+    set: {door: 0}
+expect:
+  hub: [session_started, msg]
+  hub_absent: [auth_fail, replay, malformed, unknown_session, link_lost]
