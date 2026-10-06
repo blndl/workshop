@@ -44,6 +44,8 @@ Then, in two terminals:
 .venv/bin/python -m alarm_sim node                       # terminal 2: interactive node
 ```
 
+With `--headless` the node takes no terminal input and is driven from the dashboard's simulator panel instead (see [web/README.md](../web/README.md)). Either way, it listens on the dev-only topic `sim/<node>/cmd` and reports on `sim/<node>/status` ([control.py](alarm_sim/control.py)).
+
 Node commands: `door 1`, `pir 1`, `lid 1`, `jam 6`, `reboot`, `attack replay`, `attack spoof`, `attack inject_cmd`, `status`, `help`. In the hub terminal: `cmd door-1 buzzer=1`.
 
 To play a scenario live instead: `.venv/bin/python -m alarm_sim node --scenario simulator/scenarios/jamming.yaml`.

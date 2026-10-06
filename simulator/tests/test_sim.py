@@ -108,3 +108,31 @@ def test_bad_scenario_rejected(tmp_path):
 )
 def test_topic_matching(pattern, topic, ok):
     assert topic_matches(pattern, topic) is ok
+
+
+def test_remote_control_drives_the_node():
+    import json
+
+    from alarm_sim.control import SimControl, cmd_topic, status_topic
+
+    bus, clock, hub, node, attacker, advance = rig()
+    control = SimControl(node, attacker, log=lambda _m: None)
+    remote = bus.client()
+
+    def send(cmd):
+        remote.publish(cmd_topic(NODE), json.dumps(cmd))
+        control.tick(clock.t)
+        advance(0.2)
+
+    advance(1.5)
+    send({"cmd": "set", "sensor": "door", "value": 1})
+    assert node.sensors["door"] == "1" and control.last["ok"]
+    send({"cmd": "attack", "name": "spoof"})
+    assert "auth_fail" in hub.kinds()
+    send({"cmd": "jam", "seconds": 999})
+    assert control.last["ok"] is False and "seconds" in control.last["error"]
+    send({"cmd": "rm -rf"})
+    assert control.last["ok"] is False
+    control.tick(clock.t)
+    status = json.loads([p for t, p in bus.log if t == status_topic(NODE)][-1])
+    assert status["sensors"]["door"] == "1" and status["state"] == "session"

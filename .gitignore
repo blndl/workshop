@@ -6,3 +6,6 @@ firmware/**/secrets.h
 .secrets/
 data/
 infra/docker/.env
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo

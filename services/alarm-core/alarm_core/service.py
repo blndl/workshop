@@ -27,7 +27,9 @@ EVENTS_TOPIC = "alarm/events"
 STATE_TOPIC = "alarm/state"
 SNAPSHOTS_TOPIC = "alarm/snapshots"
 KEEPALIVE_INTERVAL = 5.0
+STATE_INTERVAL = 1.0  # alarm/state is also republished this often, for live metrics
 MAX_CONTROL_BYTES = 512
+UNLOGGED = {"status", "control_done"}  # replies, not things that happened
 
 
 class AlarmService:
@@ -55,6 +57,7 @@ class AlarmService:
         self._next_keepalive: dict[str, float] = {}
         self._sent_outputs: dict[str, dict[str, str]] = {}
         self._cmd_id = 0
+        self._next_state = 0.0
         for pattern in ("alarm/v1/+/up", "alarm/v1/+/status", CONTROL_TOPIC, SNAPSHOTS_TOPIC):
             transport.subscribe(pattern, lambda t, p: self._inbox.put((t, p)))
 
@@ -79,6 +82,8 @@ class AlarmService:
         self.machine.tick(now)
         self._sync_outputs(now)
         self._flush(now)
+        if now >= self._next_state:
+            self._publish_state(now)
 
     # --- node traffic ---------------------------------------------------
 
@@ -95,6 +100,7 @@ class AlarmService:
         for e in result.events:
             if e.kind == "msg":
                 self.machine.node_online(node, now)
+                self.machine.heard(node, e.message.fields, now)
                 if e.message.type in ("HB", "EVT"):
                     self.machine.sensor(node, e.message.fields, now)
             elif e.kind == "session_started":
@@ -150,6 +156,9 @@ class AlarmService:
                 self.machine.status(now)
             else:
                 self.log(f"[alarm] unknown control action {action!r}")
+            # Every request ends with this, so callers know it was handled
+            # and a duress disarm looks exactly like a normal one.
+            self.machine.control_done(str(action)[:16])
         finally:
             self._flush(now)
             self.machine.request = None
@@ -179,24 +188,28 @@ class AlarmService:
         ts = round(self.wall(), 3)
         for e in events:
             e = {"ts": ts, **e}
-            if self.eventlog and e["type"] != "status":
+            if self.eventlog and e["type"] not in UNLOGGED:
                 e["seq"] = self.eventlog.seq + 1
                 self.eventlog.append(e)
             self.published.append(e)
             self.transport.publish(EVENTS_TOPIC, json.dumps(e))
             self._log_event(e)
-        state = {"ts": ts, **self.machine.snapshot(now)}
+        self._publish_state(now)
+
+    def _publish_state(self, now: float) -> None:
+        state = {"ts": round(self.wall(), 3), **self.machine.snapshot(now)}
         if self.eventlog:
             # Published so a copy kept elsewhere can detect a truncated log.
             state["log"] = {"seq": self.eventlog.seq, "head": self.eventlog.head}
         self.transport.publish(STATE_TOPIC, json.dumps(state), retain=True)
+        self._next_state = now + STATE_INTERVAL
 
     def _log_event(self, e: dict) -> None:
         t = e["type"]
         if t == "state":
             extra = f" (in {e['delay']:g}s)" if "delay" in e else ""
             self.log(f"[alarm] {e['prev'].upper()} -> {e['state'].upper()}: {e['reason']}{extra}")
-        elif t == "status":
+        elif t in UNLOGGED:
             return
         else:
             fields = ", ".join(f"{k}={v}" for k, v in e.items() if k not in ("ts", "type", "req"))

@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]'
+        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]' -e 'services/api[dev]'
       - name: Protocol tests
         run: pytest -q protocol/python
       - name: Test vectors are up to date
@@ -30,3 +30,20 @@ jobs:
         run: pytest -q services/camera
       - name: notifier tests
         run: pytest -q services/notifier
+      - name: api tests
+        run: pytest -q services/api
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build   # includes the TypeScript check
