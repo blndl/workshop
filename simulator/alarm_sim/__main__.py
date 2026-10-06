@@ -21,6 +21,7 @@ from alarm_protocol.hub import status_topic
 
 from . import scenario as scenario_mod
 from .attacks import ATTACKS, Attacker
+from .control import SimControl
 from .devhub import DevHub
 from .node import SENSORS, SimNode
 from alarm_protocol.transport import MemoryBus, MqttTransport
@@ -146,14 +147,17 @@ def cmd_node(args) -> int:
         a_transport = MqttTransport(host, port, "attacker", secrets["attacker"]["password"], client_id=f"attacker-{args.node}")
         attacker = Attacker(args.node, a_transport)
         a_transport.connect()
+    control = SimControl(node, attacker)  # lets the dashboard drive this node (sim/<node>/cmd)
     node.start()
     print(f"[{args.node}] connecting to {host}:{port}")
     try:
         if args.scenario:
             scn = scenario_mod.load(args.scenario)
-            scenario_mod.run(scn, node, attacker, [], time.monotonic, time.sleep)
+            scenario_mod.run(scn, node, attacker, [control.tick], time.monotonic, time.sleep)
             return 0
-        return _interactive(node, attacker)
+        if args.headless:
+            return _headless(node, control)
+        return _interactive(node, attacker, control)
     except KeyboardInterrupt:
         return 0
     finally:
@@ -162,7 +166,7 @@ def cmd_node(args) -> int:
             attacker.transport.close()
 
 
-def _interactive(node: SimNode, attacker: Attacker | None) -> int:
+def _interactive(node: SimNode, attacker: Attacker | None, control: SimControl) -> int:
     print(NODE_HELP)
     lines = _stdin_lines()
     while True:
@@ -174,6 +178,17 @@ def _interactive(node: SimNode, attacker: Attacker | None) -> int:
             except (ValueError, RuntimeError) as e:
                 print(f"error: {e}")
         node.tick(now)
+        control.tick(now)
+        time.sleep(0.05)
+
+
+def _headless(node: SimNode, control: SimControl) -> int:
+    """No terminal input: driven only by the dashboard (or run in Docker)."""
+    print(f"[{node.node_id}] headless: control it from the dashboard (sim/{node.node_id}/cmd)")
+    while True:
+        now = time.monotonic()
+        node.tick(now)
+        control.tick(now)
         time.sleep(0.05)
 
 
@@ -244,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
     n = sub.add_parser("node", help="simulated node on the MQTT broker")
     n.add_argument("--node", default="door-1")
     n.add_argument("--scenario", help="run a scenario file instead of interactive mode")
+    n.add_argument("--headless", action="store_true", help="no terminal input; control from the dashboard only")
 
     args = p.parse_args(argv)
     return {"selftest": cmd_selftest, "hub": cmd_hub, "node": cmd_node}[args.cmd](args)

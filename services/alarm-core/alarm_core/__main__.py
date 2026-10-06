@@ -97,14 +97,14 @@ def cmd_ctl(args) -> int:
     deadline = time.monotonic() + 2.0
     got = False
     while time.monotonic() < deadline:
-        if got:
-            deadline = min(deadline, time.monotonic() + 0.3)  # replies arrive together
         try:
             e = inbox.get(timeout=0.1)
         except queue.Empty:
             continue
         if e.get("req") != req or e["type"] == "duress":
             continue  # never show a duress event to whoever is holding the keypad
+        if e["type"] == "control_done":
+            break
         got = True
         if e["type"] == "status":
             e.pop("req"), e.pop("type")
@@ -114,9 +114,13 @@ def cmd_ctl(args) -> int:
             print(f"{e['prev']} -> {e['state']}{delay}")
         else:
             print(e["type"], {k: v for k, v in e.items() if k not in ("ts", "type", "req")})
+    else:
+        t.close()
+        print("no reply: is alarm-core running?")
+        return 1
     t.close()
     if not got:
-        print("ok (no change)" if args.action == "disarm" else "no reply: is alarm-core running?")
+        print("ok (no change)")
     return 0
 
 

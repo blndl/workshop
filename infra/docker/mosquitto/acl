@@ -13,6 +13,15 @@ topic write alarm/control
 topic read alarm/events
 topic read alarm/state
 
+# Web API (services/api): reads state and events, sends control requests.
+user api
+topic write alarm/control
+topic read alarm/events
+topic read alarm/state
+# DEV ONLY: the dashboard's simulator panel drives the fake nodes.
+topic write sim/+/cmd
+topic read sim/+/status
+
 # Camera service: follows the alarm, announces each picture it stores.
 user camera
 topic read alarm/events
@@ -33,3 +42,8 @@ topic readwrite alarm/v1/#
 pattern write alarm/v1/%u/up
 pattern write alarm/v1/%u/status
 pattern read alarm/v1/%u/down
+
+# DEV ONLY: simulated nodes take dashboard commands and report what they do.
+# A real ESP has no such channel. Remove these two lines on a real deployment.
+pattern read sim/%u/cmd
+pattern write sim/%u/status

@@ -40,7 +40,7 @@ Sensor activity during ARMING is ignored, so you can walk out through the door.
 | `alarm/v1/<node>/up` / `down` | nodes ↔ alarm-core | Encrypted protocol traffic ([spec](../../protocol/spec.md)) |
 | `alarm/control` | clients → alarm-core | `{"action": "arm"\|"disarm"\|"status", "code": "1234", "source": "cli", "req": "a1b2"}` |
 | `alarm/events` | alarm-core → services | One JSON event per message |
-| `alarm/state` | alarm-core → services | Retained snapshot: state, reason, siren, each node's link and sensors |
+| `alarm/state` | alarm-core → services | Retained snapshot, republished every second: state, reason, siren, countdown, and per node `online`, `sensors`, `rssi` (dBm), `uptime` (s), `seen_ago` (s), `security` (rejected messages by kind) |
 
 The internal topics are protected only by broker accounts (see [acl](../../infra/docker/mosquitto/acl)): the nodes and the dev `attacker` account can't reach them. On the Pi the broker isn't exposed beyond the Docker network and the IoT interface. This is a trust boundary to cover in the threat model.
 
@@ -60,6 +60,7 @@ Every event has `ts` (Unix time) and `type`. If it answers a control request, it
 | `duress` | `action`, `source` | **Never display this on any local screen.** It goes to the notifier only. |
 | `siren_timeout` | `seconds` | Siren switched off after the legal maximum |
 | `status` | the snapshot | Reply to `{"action": "status"}` |
+| `control_done` | `action` | Last event for **every** control request: the request was handled. Callers wait for it instead of guessing with a timeout, and it makes a duress disarm indistinguishable from a normal one. Not written to the log. |
 
 ## Tamper-evident event log
 

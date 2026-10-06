@@ -43,6 +43,8 @@ class AlarmMachine:
         self.siren = False
         self.online = {n: False for n in nodes}
         self.sensors: dict[str, dict[str, str]] = {n: {} for n in nodes}
+        self.telemetry: dict[str, dict] = {n: {} for n in nodes}  # rssi, uptime, last_seen
+        self.security_counts: dict[str, dict[str, int]] = {n: {} for n in nodes}
         self.events: list[dict] = []
         self.request: str | None = None  # set by the service so replies can be matched
         self._deadline: float | None = None
@@ -60,8 +62,31 @@ class AlarmMachine:
             "node": self.node,
             "siren": self.siren,
             "deadline_in": round(max(0.0, self._deadline - now), 1) if self._deadline else None,
-            "nodes": {n: {"online": self.online[n], "sensors": dict(self.sensors[n])} for n in self.online},
+            "nodes": {n: self._node_snapshot(n, now) for n in self.online},
         }
+
+    def _node_snapshot(self, node: str, now: float) -> dict:
+        t = self.telemetry[node]
+        return {
+            "online": self.online[node],
+            "sensors": dict(self.sensors[node]),
+            "rssi": t.get("rssi"),
+            "uptime": t.get("uptime"),
+            "seen_ago": round(now - t["last_seen"], 1) if "last_seen" in t else None,
+            "security": dict(self.security_counts[node]),
+        }
+
+    def heard(self, node: str, fields: dict[str, str], now: float) -> None:
+        """Record link metrics from any valid message (rssi/up come with heartbeats)."""
+        if node not in self.telemetry:
+            return
+        t = self.telemetry[node]
+        t["last_seen"] = now
+        for key, name in (("rssi", "rssi"), ("up", "uptime")):
+            try:
+                t[name] = int(fields[key])
+            except (KeyError, ValueError):
+                pass
 
     def drain(self) -> list[dict]:
         out, self.events = self.events, []
@@ -95,6 +120,9 @@ class AlarmMachine:
 
     def status(self, now: float) -> None:
         self._emit("status", **self.snapshot(now))
+
+    def control_done(self, action: str) -> None:
+        self._emit("control_done", action=action)
 
     # --- user actions ---------------------------------------------------
 
@@ -150,6 +178,9 @@ class AlarmMachine:
             self._set_state(TRIGGERED, now, "link_lost", node)
 
     def security(self, node: str, kind: str, detail: str, now: float) -> None:
+        if node in self.security_counts:
+            counts = self.security_counts[node]
+            counts[kind] = counts.get(kind, 0) + 1
         self._emit("security", node=node, kind=kind, detail=detail)
 
     def sensor(self, node: str, fields: dict[str, str], now: float) -> None:

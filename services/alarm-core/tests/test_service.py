@@ -109,7 +109,7 @@ def test_spoofed_door_closed_is_reported_not_believed(rig):
 
 def test_bad_codes_and_garbage_control_messages(rig):
     rig.control(action="arm", code="0000", req="r1")
-    assert rig.events[-1]["type"] == "bad_code" and rig.events[-1]["req"] == "r1"
+    assert [(e["type"], e["req"]) for e in rig.events[-2:]] == [("bad_code", "r1"), ("control_done", "r1")]
     rig.ctl.publish(CONTROL_TOPIC, b"not json")
     rig.ctl.publish(CONTROL_TOPIC, b"[1,2]")
     rig.ctl.publish(CONTROL_TOPIC, json.dumps({"action": "arm", "code": "1234", "pad": "x" * 600}))
@@ -119,7 +119,7 @@ def test_bad_codes_and_garbage_control_messages(rig):
 
 def test_status_and_retained_state(rig):
     rig.control(action="status", req="s1")
-    status = rig.events[-1]
+    status = rig.events[-2]
     assert status["type"] == "status" and status["nodes"][NODE]["online"]
     states = [json.loads(p) for t, p in rig.bus.log if t == STATE_TOPIC]
     assert states[-1]["state"] == DISARMED
@@ -161,3 +161,24 @@ def test_tampered_log_raises_event_at_startup(tmp_path):
                            wall=lambda: 0.0, eventlog=EventLog(path, b"k" * 32))
     service.tick(0)
     assert service.published[0]["type"] == "log_tampered"
+
+
+def test_duress_reply_looks_like_a_normal_disarm(rig):
+    def visible(code, req):
+        arm(rig)
+        rig.control(action="disarm", code=code, req=req)
+        return [{k: v for k, v in e.items() if k not in ("ts", "req")}
+                for e in rig.events if e.get("req") == req and e["type"] != "duress"]
+
+    assert visible("1234", "normal") == visible("9999", "forced")
+
+
+def test_state_carries_node_metrics(rig):
+    arm(rig)
+    rig.attacker.run("spoof")
+    rig.run(1.5)
+    states = [json.loads(p) for t, p in rig.bus.log if t == STATE_TOPIC]
+    node = states[-1]["nodes"][NODE]
+    assert -70 <= node["rssi"] <= -50 and node["uptime"] >= 10
+    assert node["seen_ago"] is not None and node["seen_ago"] < 1.5
+    assert node["security"] == {"auth_fail": 1}

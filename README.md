@@ -24,8 +24,8 @@ A home security box that is itself hard to attack, and uses AI to cut false alar
 # install everything and run all tests (offline, no Docker needed)
 python3 -m venv .venv
 .venv/bin/pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' \
-                      -e 'services/camera[dev,webcam]' -e 'services/notifier[dev]'
-.venv/bin/pytest protocol/python simulator services/alarm-core services/camera services/notifier
+                      -e 'services/camera[dev,webcam]' -e 'services/notifier[dev]' -e 'services/api[dev]'
+.venv/bin/pytest protocol/python simulator services/alarm-core services/camera services/notifier services/api
 .venv/bin/python -m alarm_sim selftest
 ```
 
@@ -46,10 +46,11 @@ Then one terminal per service:
 | 3 | `.venv/bin/python -m alarm_notifier run` | phone alerts |
 | 4 | `.venv/bin/python -m alarm_sim node` | the simulated ESP: type `door 1`, `jam 6`, `attack spoof`… |
 | 5 | `.venv/bin/python -m alarm_core ctl arm 1234` | arm / disarm (`9999` = duress) / status |
+| 6 | `.venv/bin/python -m alarm_api --sim` | dashboard at http://127.0.0.1:8000 (build it once: `cd web && npm install && npm run build`), API docs at `/docs` |
 
-Arm, wait 5 s, type `door 1` in terminal 4, wait 10 s: the alarm triggers, the node's buzzer turns on, and your phone gets an urgent alert with a photo. Afterwards, `.venv/bin/python -m alarm_core verify-log --snapshots` checks that the log and photos haven't been tampered with.
+Arm (from the dashboard or terminal 5), wait 5 s, open the door (dashboard simulator panel, or `door 1` in terminal 4), wait 10 s: the alarm triggers, the node's buzzer turns on, and your phone gets an urgent alert with a photo. Afterwards, `.venv/bin/python -m alarm_core verify-log --snapshots` checks that the log and photos haven't been tampered with.
 
-Details: [simulator](simulator/README.md) · [alarm-core](services/alarm-core/README.md) · [camera](services/camera/README.md) · [notifier](services/notifier/README.md) · [protocol](protocol/spec.md)
+Details: [simulator](simulator/README.md) · [alarm-core](services/alarm-core/README.md) · [camera](services/camera/README.md) · [notifier](services/notifier/README.md) · [api](services/api/README.md) · [dashboard](web/README.md) · [protocol](protocol/spec.md)
 
 ## Phases
 
