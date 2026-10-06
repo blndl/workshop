@@ -25,6 +25,14 @@ DEFAULT_SECRETS = REPO / ".secrets" / "dev.json"
 DEFAULT_DIR = REPO / "data" / "snapshots"
 
 
+def broker(args, s: dict) -> tuple[str, int]:
+    if args.broker:
+        host, _, port = args.broker.partition(":")
+        return host, int(port or 1883)
+    b = s.get("broker", {})
+    return b.get("host", "127.0.0.1"), int(b.get("port", 1883))
+
+
 def make_source(args):
     if args.fake:
         return FakeSource()
@@ -51,8 +59,7 @@ def cmd_run(args) -> int:
     if not args.secrets.exists():
         sys.exit(f"{args.secrets} not found. Run scripts/dev-secrets.sh first.")
     s = json.loads(args.secrets.read_text())
-    b = s.get("broker", {})
-    host, port = b.get("host", "127.0.0.1"), int(b.get("port", 1883))
+    host, port = broker(args, s)
     transport = MqttTransport(host, port, "camera", s["camera"]["password"], client_id="alarm-camera")
     store = SnapshotStore(args.dir, args.retention_days)
     service = CameraService(make_source(args), store, transport)
@@ -73,6 +80,7 @@ def cmd_run(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="alarm-camera", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--secrets", type=Path, default=DEFAULT_SECRETS)
+    p.add_argument("--broker", help="host[:port], overrides the secrets file")
     src = p.add_mutually_exclusive_group()
     src.add_argument("--device", type=int, default=0, help="webcam index (default 0)")
     src.add_argument("--images", type=Path, help="folder of .jpg test images")

@@ -47,3 +47,27 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run build   # includes the TypeScript check
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secrets for the test stack
+        run: scripts/dev-secrets.sh
+      - name: Build and start the box + simulated ESP
+        run: scripts/sim.sh up
+      - name: alarm-core sees the node
+        run: |
+          for i in $(seq 30); do
+            scripts/sim.sh status | grep -q '"online": true' && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Arm through the API
+        run: |
+          curl -sf -X POST -H 'content-type: application/json' -d '{"code":"1234"}' localhost:8000/api/arm
+      - name: Network segmentation
+        run: scripts/sim.sh probe
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f infra/docker/compose.yml --profile hub --profile sim logs

@@ -49,4 +49,4 @@ docker run --rm -v "$PWD/.secrets/mosquitto:/m" eclipse-mosquitto:2 \
   sh -c 'chmod 600 /m/passwd && mosquitto_passwd -U /m/passwd && chown 1883:1883 /m/passwd'
 
 echo "wrote .secrets/dev.json and .secrets/mosquitto/passwd (dev codes: 1234 user, 9999 duress)"
-echo "restart the broker to load new accounts: docker compose -f infra/docker/compose.dev.yml restart"
+echo "restart the broker to load new accounts: docker compose -f infra/docker/compose.yml restart"

@@ -1,0 +1,109 @@
+# The whole alarm system. Run from the repo root (scripts/sim.sh wraps these):
+#
+#   docker compose -f infra/docker/compose.yml up -d                    # broker + ntfy only (services run on your machine)
+#   docker compose -f infra/docker/compose.yml --profile hub up -d      # "the box": + alarm-core, api, camera, notifier
+#   ... --profile hub --profile sim up -d                               # + a simulated ESP, no hardware needed
+#
+# Networks mirror a real home:
+#   iot   the house Wi-Fi: sensor nodes and the broker, nothing else
+#   core  inside the box: broker and the services
+# The broker is the only thing on both. scripts/sim.sh probe checks that.
+
+name: alarm
+
+x-service: &service
+  image: alarm
+  build:
+    context: ../..
+    dockerfile: infra/docker/Dockerfile
+  restart: unless-stopped
+  volumes:
+    - ../../.secrets:/app/.secrets:ro
+    - ../../data:/app/data
+  depends_on: [mosquitto]
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      # 127.0.0.1 by default; MQTT_BIND=0.0.0.0 lets real ESPs on the LAN connect.
+      - "${MQTT_BIND:-127.0.0.1}:1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/acl:/mosquitto/config/acl:ro
+      - ../../.secrets/mosquitto:/mosquitto/secrets:ro
+    networks: [iot, core]
+    restart: unless-stopped
+
+  ntfy:
+    image: binwiederhier/ntfy
+    command: serve
+    environment:
+      NTFY_BASE_URL: ${NTFY_BASE_URL:-http://localhost:8080}
+    ports:
+      - "8080:80"   # all interfaces, so a phone on the same network can reach it
+    volumes:
+      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy-auth:/var/lib/ntfy
+      - ntfy-cache:/var/cache/ntfy
+    networks: [core]
+    restart: unless-stopped
+
+  # --- the box (profile: hub) ---------------------------------------------------
+
+  alarm-core:
+    <<: *service
+    profiles: [hub]
+    command: [python, -m, alarm_core, --broker, "mosquitto:1883", run,
+              --exit-delay, "${EXIT_DELAY:-30}", --entry-delay, "${ENTRY_DELAY:-30}"]
+    networks: [core]
+
+  api:
+    <<: *service
+    profiles: [hub]
+    command: [python, -m, alarm_api, --broker, "mosquitto:1883", --host, 0.0.0.0]
+    environment:
+      ALARM_SIM: ${ALARM_SIM:-0}   # 1 = show the simulator panel (dev only)
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"   # localhost only until login (task D2) exists
+    networks: [core]
+
+  camera:
+    <<: *service
+    profiles: [hub]
+    # Docker on macOS can't reach the webcam: generated frames by default.
+    # On a Linux host with a webcam: CAMERA_SOURCE=--device=0 and uncomment devices.
+    command: [python, -m, alarm_camera, --broker, "mosquitto:1883", "${CAMERA_SOURCE:---fake}", run]
+    # devices: ["/dev/video0:/dev/video0"]
+    networks: [core]
+
+  notifier:
+    <<: *service
+    profiles: [hub]
+    command: [python, -m, alarm_notifier, --broker, "mosquitto:1883", --ntfy-url, "http://ntfy:80", run]
+    depends_on: [mosquitto, ntfy]
+    networks: [core]
+
+  # --- simulated hardware (profile: sim) ----------------------------------------
+
+  door-1:
+    <<: *service
+    profiles: [sim]
+    command: [python, -m, alarm_sim, --broker, "mosquitto:1883", node, --node, door-1, --headless]
+    networks: [iot]
+
+  # Segmentation check: a device on the house Wi-Fi tries to reach everything.
+  probe:
+    <<: *service
+    profiles: [probe]
+    restart: "no"
+    command: [python, -m, alarm_sim.probe]
+    networks: [iot]
+
+networks:
+  iot:
+  core:
+
+volumes:
+  ntfy-auth:
+  ntfy-cache:

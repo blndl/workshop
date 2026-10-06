@@ -54,8 +54,12 @@ def cmd_send(args) -> int:
 
 def cmd_run(args) -> int:
     s = load(args)
-    br = s.get("broker", {})
-    host, port = br.get("host", "127.0.0.1"), int(br.get("port", 1883))
+    if args.broker:
+        host, _, port = args.broker.partition(":")
+        port = int(port or 1883)
+    else:
+        br = s.get("broker", {})
+        host, port = br.get("host", "127.0.0.1"), int(br.get("port", 1883))
     transport = MqttTransport(host, port, "notifier", s["notifier"]["password"], client_id="alarm-notifier")
     b = backend(args, s)
     service = NotifierService(b, transport, args.snapshots)
@@ -74,6 +78,7 @@ def cmd_run(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="alarm-notifier", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--secrets", type=Path, default=DEFAULT_SECRETS)
+    p.add_argument("--broker", help="host[:port], overrides the secrets file")
     p.add_argument("--ntfy-url", help="override the server, e.g. https://ntfy.sh")
     p.add_argument("--topic", help="override the topic")
     p.add_argument("--token", help="override the access token")

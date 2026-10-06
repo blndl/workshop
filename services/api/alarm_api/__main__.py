@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -28,7 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--broker", help="host[:port], overrides the secrets file")
     p.add_argument("--host", default="127.0.0.1", help="keep 127.0.0.1 until login (D2) exists")
     p.add_argument("--port", type=int, default=8000)
-    p.add_argument("--sim", action="store_true", help="enable the simulator control panel (dev only)")
+    p.add_argument("--sim", action="store_true", default=os.environ.get("ALARM_SIM") == "1",
+                   help="enable the simulator control panel (dev only; or ALARM_SIM=1)")
     p.add_argument("--web", type=Path, default=DEFAULT_WEB, help="built dashboard to serve (default web/dist)")
     args = p.parse_args(argv)
 

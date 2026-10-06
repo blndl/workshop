@@ -5,7 +5,7 @@
 # Saves them in .secrets/dev.json under "ntfy". Run scripts/dev-secrets.sh first.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-COMPOSE=(docker compose -f infra/docker/compose.dev.yml)
+COMPOSE=(docker compose -f infra/docker/compose.yml)
 TOPIC=alarm
 
 IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || true)
@@ -41,6 +41,11 @@ d["ntfy"] = {
 }
 p.write_text(json.dumps(d, indent=2) + "\n")
 PY
+fi
+
+# A running notifier container read the old token at startup: restart it.
+if "${COMPOSE[@]}" ps --status running --services 2>/dev/null | grep -qx notifier; then
+  "${COMPOSE[@]}" restart notifier >/dev/null && echo "restarted the notifier container with the new token"
 fi
 
 python3 - <<'PY'

@@ -34,7 +34,7 @@ Runs every scenario against the in-memory hub on a fake clock. It takes under a 
 
 ```bash
 scripts/dev-secrets.sh                                   # once: keys + broker passwords
-docker compose -f infra/docker/compose.dev.yml up -d     # Mosquitto on 127.0.0.1:1883
+docker compose -f infra/docker/compose.yml up -d     # Mosquitto on 127.0.0.1:1883
 ```
 
 Then, in two terminals:
@@ -53,7 +53,7 @@ To play a scenario live instead: `.venv/bin/python -m alarm_sim node --scenario 
 You can watch the raw traffic, and see that it's unreadable:
 
 ```bash
-docker compose -f infra/docker/compose.dev.yml exec mosquitto \
+docker compose -f infra/docker/compose.yml exec mosquitto \
   mosquitto_sub -u attacker -P "$(jq -r .attacker.password .secrets/dev.json)" -t 'alarm/v1/#' -v
 ```
 

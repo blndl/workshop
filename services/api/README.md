@@ -47,7 +47,7 @@ Arm/disarm outcomes:
 
 ```bash
 .venv/bin/pip install -e 'services/api[dev]'
-scripts/dev-secrets.sh && docker compose -f infra/docker/compose.dev.yml restart mosquitto   # once: adds the api account
+scripts/dev-secrets.sh && docker compose -f infra/docker/compose.yml restart mosquitto   # once: adds the api account
 
 .venv/bin/python -m alarm_core run          # terminal 1
 .venv/bin/python -m alarm_sim node          # terminal 2
