@@ -1,0 +1,19 @@
+{
+  "name": "ia-vison",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "mqtt": "^5.16.0",
+    "onnxruntime-web": "^1.30.0"
+  }
+}
