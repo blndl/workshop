@@ -23,6 +23,7 @@ export const api = {
   state: () => get<StateSnapshot>("/api/state"),
   events: (limit = 100) => get<AlarmEvent[]>(`/api/events?limit=${limit}`),
   sim: () => get<SimInfo>("/api/sim"),
+  info: () => get<{ grafana_url: string | null }>("/api/info"),
   arm: (code: string) => post<ControlResult>("/api/arm", { code }),
   disarm: (code: string) => post<ControlResult>("/api/disarm", { code }),
   simCommand: (node: string, command: SimCommand) => post<{ sent: boolean }>(`/api/sim/${node}/command`, command),

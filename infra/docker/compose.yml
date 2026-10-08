@@ -3,6 +3,7 @@
 #   docker compose -f infra/docker/compose.yml up -d                    # broker + ntfy only (services run on your machine)
 #   docker compose -f infra/docker/compose.yml --profile hub up -d      # "the box": + alarm-core, api, camera, notifier
 #   ... --profile hub --profile sim up -d                               # + a simulated ESP, no hardware needed
+#   ... --profile monitoring                                            # + Prometheus, Grafana, Loki (infra/monitoring)
 #
 # Networks mirror a real home:
 #   iot   the house Wi-Fi: sensor nodes and the broker, nothing else
@@ -47,6 +48,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./postgres/readonly.sql:/docker-entrypoint-initdb.d/readonly.sql:ro   # Grafana's read-only role
     healthcheck:   # "ready" only once it accepts connections, not just started
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 2s
@@ -85,6 +87,7 @@ services:
     environment:
       ALARM_SIM: ${ALARM_SIM:-0}   # 1 = show the simulator panel (dev only)
       DATABASE_URL: postgresql://${POSTGRES_USER:-alarm}:${POSTGRES_PASSWORD:-alarm-dev-password}@postgres:5432/${POSTGRES_DB:-alarm}
+      GRAFANA_URL: ${GRAFANA_URL:-}   # as seen by the browser; set by sim.sh when monitoring runs (Metrics tab)
     depends_on:
       mosquitto: {condition: service_started}
       postgres: {condition: service_healthy}   # start only once the database accepts connections
@@ -124,6 +127,87 @@ services:
     command: [python, -m, alarm_sim.probe]
     networks: [iot]
 
+  # --- monitoring (profile: monitoring) -----------------------------------------
+  # Configs in infra/monitoring/. Only Grafana is published, on localhost.
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    profiles: [monitoring]
+    command: [--config.file=/etc/prometheus/prometheus.yml, --storage.tsdb.retention.time=15d]
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks: [core]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}   # sim.sh passes the one from .secrets/dev.json
+      # Read-only viewing without a login, and embeddable in the dashboard's Metrics tab.
+      # Fine on localhost; revisit with the dashboard login (task D2).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/alarm.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [prometheus, loki, postgres]
+    networks: [core]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.8
+    profiles: [monitoring]
+    volumes:
+      - loki-data:/loki
+    networks: [core]
+    restart: unless-stopped
+
+  alloy:   # ships container logs to Loki (duress lines dropped)
+    image: grafana/alloy:v1.20.1
+    profiles: [monitoring]
+    command: [run, /etc/alloy/config.alloy, --storage.path=/var/lib/alloy/data]
+    volumes:
+      - ../monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      # Read access to the Docker API: powerful (it can see every container). Monitoring only.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    networks: [core]
+    restart: unless-stopped
+
+  node-exporter:   # the box: CPU, memory, disk
+    image: prom/node-exporter:v1.12.1
+    profiles: [monitoring]
+    command: [--path.rootfs=/host]
+    volumes:
+      - /:/host:ro
+    pid: host
+    networks: [core]
+    restart: unless-stopped
+
+  cadvisor:   # per-container CPU and memory
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    profiles: [monitoring]
+    privileged: true
+    devices: [/dev/kmsg]
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # container names
+      - /run/containerd:/run/containerd:ro             # cAdvisor's Docker support goes through containerd
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [core]
+    restart: unless-stopped
+
 networks:
   iot:
   core:
@@ -131,4 +215,7 @@ networks:
 volumes:
   ntfy-auth:
   ntfy-cache:
+  prometheus-data:
+  grafana-data:
+  loki-data:
   postgres-data:

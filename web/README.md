@@ -15,6 +15,7 @@ src/
     Metrics            counts of alarms, attacks, link losses, wrong codes, photos
     Timeline           recent events, coloured by severity
     SimPanel           DEV ONLY: drive the simulated ESPs, see their LED and buzzer
+    MetricsTab         the Metrics tab: Grafana embedded (needs the monitoring profile)
 ```
 
 ## Run it

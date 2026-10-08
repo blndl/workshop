@@ -61,6 +61,7 @@ class Bridge:
         self.sim = sim
         self.sim_nodes: dict[str, dict] = {}
         self.store = store
+        self.listeners: list = []  # called with every real event (e.g. metrics); never duress or replies
 
         transport.subscribe(STATE_TOPIC, self._on_state)
         transport.subscribe(EVENTS_TOPIC, self._on_event)
@@ -125,8 +126,11 @@ class Bridge:
 
         # Persist real alarm events in PostgreSQL (not replies such as
         # "status" and "control_done"). put() only queues: it never blocks.
-        if self.store is not None and e.get("type") not in REPLIES:
-            self.store.put(e)
+        if e.get("type") not in REPLIES:
+            if self.store is not None:
+                self.store.put(e)
+            for listener in self.listeners:
+                listener(e)
 
         with self._lock:
             if e.get("type") not in REPLIES:

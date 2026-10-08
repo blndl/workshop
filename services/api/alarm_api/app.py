@@ -11,12 +11,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Path as PathParam, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .bridge import AlarmCoreTimeout, Bridge
+from .metrics import CONTENT_TYPE_LATEST, Metrics
 
 # HTTP status per alarm-core outcome.
 OUTCOME_STATUS = {
@@ -65,7 +66,7 @@ def outcome(events: list[dict]) -> dict:
     return {"result": "no_change"}
 
 
-def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
+def create_app(bridge: Bridge, web_dir: Path | None = None, grafana_url: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         bridge.start()
@@ -78,6 +79,25 @@ def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
         description="State, events and control of the alarm. Login (D2) is not implemented yet.",
         lifespan=lifespan,
     )
+    metrics = Metrics(bridge)
+
+    @app.middleware("http")
+    async def time_requests(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        # The route template ("/api/sim/{node}/command"), not the raw path: bounded labels.
+        route = getattr(request.scope.get("route"), "path", None) or "other"
+        metrics.http.labels(request.method, route, str(response.status_code)).observe(time.perf_counter() - start)
+        return response
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics():
+        return Response(metrics.render(), media_type=CONTENT_TYPE_LATEST)
+
+    @app.get("/api/info")
+    def info():
+        """Settings the dashboard needs, e.g. where Grafana is (None if not running)."""
+        return {"grafana_url": grafana_url}
 
     @app.get("/api/health")
     def health():
