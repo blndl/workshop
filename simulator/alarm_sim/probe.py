@@ -11,6 +11,7 @@ TARGETS = [
     ("mosquitto", 1883, True, "broker: nodes must reach it"),
     ("api", 8000, False, "web API / dashboard"),
     ("ntfy", 80, False, "alert server"),
+    ("postgres", 5432, False, "event database"),
     ("alarm-core", 1883, False, "alarm-core (no listening port at all)"),
 ]
 

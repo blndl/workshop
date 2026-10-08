@@ -43,6 +43,23 @@ Arm/disarm outcomes:
 
 **Duress:** `duress` events are dropped as soon as they arrive. They're never stored, listed or returned. A duress disarm returns exactly what a normal disarm returns; `test_duress_disarm_is_indistinguishable` checks this. Only the notifier sends the silent alert.
 
+## Event database (PostgreSQL)
+
+When `DATABASE_URL` is set (the Docker stack sets it), every event is also stored in the `alarm_events` table, for history and search. Without it, events stay in memory only.
+
+- **Never blocks:** the MQTT handler only queues the event (`database.EventStore.put`). One background thread keeps a connection open and writes in batches, so a slow database can't delay arm/disarm replies.
+- **Never loses events:** if PostgreSQL isn't ready or goes away, events wait in the queue (up to 10,000; beyond that the oldest are dropped and counted) and are written when it comes back. In Docker, the API also waits for the database's healthcheck before starting.
+- **Backfill:** events from before the API started never reach it over MQTT. On its first connection the store copies them from alarm-core's log (`data/events.jsonl`): everything with a `seq` above the highest one stored. `seq` is unique, so live events and the backfill never duplicate.
+- **Same rules as the API:** `duress` events and replies (`status`, `control_done`) are never stored.
+- **The log stays the source of truth.** The database isn't tamper-evident; `alarm_core verify-log` is.
+
+`GET /api/health` shows the database side: `connected`, `pending`, `written`, `dropped`.
+
+```bash
+docker compose -f infra/docker/compose.yml exec postgres psql -U alarm -d alarm \
+  -c "select seq, event_type, event_time from alarm_events order by seq desc limit 10"
+```
+
 ## Running it
 
 ```bash

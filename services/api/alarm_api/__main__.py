@@ -47,9 +47,15 @@ def main(argv: list[str] | None = None) -> int:
         host, port = b.get("host", "127.0.0.1"), int(b.get("port", 1883))
 
     transport = MqttTransport(host, port, "api", s["api"]["password"], client_id="alarm-api")
-    app = create_app(Bridge(transport, sim=args.sim), args.web)
+    store = None
+    if os.environ.get("DATABASE_URL"):
+        from .database import EventStore
+
+        # Backfill from alarm-core's log so events from before the API started aren't missing.
+        store = EventStore(os.environ["DATABASE_URL"], backfill_from=REPO / "data" / "events.jsonl")
+    app = create_app(Bridge(transport, sim=args.sim, store=store), args.web)
     web = "dashboard at /" if (args.web / "index.html").exists() else "no dashboard build (cd web && npm run build)"
-    print(f"[api] broker {host}:{port}; http://{args.host}:{args.port} ({web}, docs at /docs)" + (", SIM CONTROL ON" if args.sim else ""))
+    print(f"[api] broker {host}:{port}; http://{args.host}:{args.port} ({web}, docs at /docs)" + (", SIM CONTROL ON" if args.sim else "") + (", events -> PostgreSQL" if store else ", no DATABASE_URL: events in memory only"))
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
 
