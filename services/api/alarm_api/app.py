@@ -11,12 +11,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Path as PathParam, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import camera
 from .bridge import AlarmCoreTimeout, Bridge
+from .metrics import CONTENT_TYPE_LATEST, Metrics
 
 # HTTP status per alarm-core outcome.
 OUTCOME_STATUS = {
@@ -37,8 +39,9 @@ class SimCommand(BaseModel):
     """A command for a simulated node (see simulator/alarm_sim/control.py)."""
 
     cmd: Literal["set", "jam", "reboot", "attack"]
-    sensor: Literal["door", "pir", "lid"] | None = None
-    value: Literal[0, 1] | None = None
+    # Any sensor the module describes (the simulated node checks it against its description).
+    sensor: str | None = Field(None, pattern=r"^[a-z][a-z0-9_]{0,15}$")
+    value: float | None = Field(None, ge=-100_000, le=100_000)  # 0/1 for on/off sensors
     seconds: float | None = Field(None, ge=0.5, le=60)
     name: str | None = Field(None, pattern=r"^[a-z_]{1,24}$")
     args: dict[str, int | str] | None = None
@@ -54,6 +57,8 @@ def outcome(events: list[dict]) -> dict:
         return {"result": "locked", "detail": "codes are locked after too many wrong attempts"}
     if "bad_code" in by_type:
         return {"result": "bad_code", "detail": "wrong code"}
+    if "safety_silenced" in by_type and "state" not in by_type:
+        return {"result": "ok", "detail": "safety alarm silenced", "silenced": by_type["safety_silenced"].get("alarms", [])}
     if "arm_refused" in by_type:
         return {"result": "arm_refused", "detail": by_type["arm_refused"].get("problems", [])}
     if "state" in by_type:
@@ -65,7 +70,8 @@ def outcome(events: list[dict]) -> dict:
     return {"result": "no_change"}
 
 
-def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
+def create_app(bridge: Bridge, web_dir: Path | None = None, grafana_url: str | None = None,
+               snapshots_dir: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         bridge.start()
@@ -78,11 +84,35 @@ def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
         description="State, events and control of the alarm. Login (D2) is not implemented yet.",
         lifespan=lifespan,
     )
+    metrics = Metrics(bridge)
+
+    @app.middleware("http")
+    async def time_requests(request: Request, call_next):
+        start = time.perf_counter()
+        response = await call_next(request)
+        # The route template ("/api/sim/{node}/command"), not the raw path: bounded labels.
+        route = getattr(request.scope.get("route"), "path", None) or "other"
+        metrics.http.labels(request.method, route, str(response.status_code)).observe(time.perf_counter() - start)
+        return response
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics():
+        return Response(metrics.render(), media_type=CONTENT_TYPE_LATEST)
+
+    @app.get("/api/info")
+    def info():
+        """Settings the dashboard needs, e.g. where Grafana is (None if not running)."""
+        return {"grafana_url": grafana_url}
 
     @app.get("/api/health")
     def health():
         age = None if bridge.state_received_at is None else round(time.time() - bridge.state_received_at, 1)
-        return {"mqtt_connected": bridge.connected, "state_received": bridge.state is not None, "state_age_s": age}
+        db = None
+        if bridge.store is not None:
+            db = {"connected": bridge.store.connected, "pending": bridge.store.pending,
+                  "written": bridge.store.written, "dropped": bridge.store.dropped}
+        return {"mqtt_connected": bridge.connected, "state_received": bridge.state is not None,
+                "state_age_s": age, "database": db}
 
     @app.get("/api/state")
     def state():
@@ -116,7 +146,11 @@ def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
     @app.get("/api/sim")
     def sim_info():
         """Whether the simulator panel is enabled, and the simulated nodes seen."""
-        return {"enabled": bridge.sim, "nodes": bridge.sim_nodes if bridge.sim else {}}
+        if not bridge.sim:
+            return {"enabled": False, "nodes": {}}
+        now = time.time()  # age computed here: the browser's clock may differ from the server's
+        return {"enabled": True,
+                "nodes": {n: {**st, "age_s": round(now - st.get("received_at", now), 1)} for n, st in bridge.sim_nodes.items()}}
 
     @app.post("/api/sim/{node}/command", status_code=202)
     def sim_command(cmd: SimCommand, node: str = PathParam(pattern=r"^[a-z0-9-]{1,16}$")):
@@ -124,6 +158,8 @@ def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
             raise HTTPException(404, "simulator control is disabled (start the API with --sim)")
         bridge.sim_command(node, cmd.model_dump(exclude_none=True))
         return {"sent": True}
+
+    app.include_router(camera.router(bridge, snapshots_dir))
 
     # The React dashboard (web/dist after `npm run build`), served last so /api wins.
     if web_dir and (web_dir / "index.html").exists():

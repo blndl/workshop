@@ -17,7 +17,6 @@ import json
 import queue
 
 from .attacks import ATTACKS
-from .node import SENSORS
 
 STATUS_INTERVAL = 1.0
 MAX_CMD_BYTES = 512
@@ -79,9 +78,11 @@ class SimControl:
             kind = c.get("cmd")
             if kind == "set":
                 sensor, value = c.get("sensor"), c.get("value")
-                if sensor not in SENSORS or value not in (0, 1, "0", "1"):
-                    raise ValueError(f"set needs sensor in {SENSORS} and value 0/1")
-                self.node.set(now, **{sensor: int(value)})
+                if sensor not in self.node.module.sensors:
+                    raise ValueError(f"set needs a sensor of {self.node.node_id}: {sorted(self.node.module.sensors)}")
+                if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+                    raise ValueError("value must be 0/1 or a number")
+                self.node.set(now, **{sensor: value})
             elif kind == "jam":
                 self.node.jam(now, _seconds(c, 1, 60))
             elif kind == "reboot":

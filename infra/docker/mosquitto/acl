@@ -6,6 +6,7 @@ topic read alarm/control
 topic write alarm/events
 topic write alarm/state
 topic read alarm/snapshots
+topic read alarm/detections
 
 # Control client (dev CLI now, the API service later).
 user ctl
@@ -18,15 +19,25 @@ user api
 topic write alarm/control
 topic read alarm/events
 topic read alarm/state
+topic read alarm/camera/#
+topic read alarm/detector/status
 # DEV ONLY: the dashboard's simulator panel drives the fake nodes.
 topic write sim/+/cmd
 topic read sim/+/status
 
-# Camera service: follows the alarm, announces each picture it stores.
+# Camera service: follows the alarm, announces each picture it stores,
+# streams live frames while it is on.
 user camera
 topic read alarm/events
 topic read alarm/state
 topic write alarm/snapshots
+topic write alarm/camera/#
+
+# Detector: analyses each snapshot (YOLO), publishes the result.
+user detector
+topic read alarm/events
+topic write alarm/detections
+topic write alarm/detector/status
 
 # Notifier: follows the alarm, sends phone alerts.
 user notifier

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { api } from "../api";
-import type { SimCommand, SimNodeStatus } from "../types";
+import { alarmValue, sensorLabel, toggleText } from "../sensors";
+import type { NodeState, SimCommand, SimNodeStatus } from "../types";
 
-/** Dev only: drives the simulated ESPs (the API must run with --sim). */
-export function SimPanel({ nodes }: { nodes: Record<string, SimNodeStatus> }) {
+/** Dev only: drives the simulated modules (the API must run with --sim). */
+export function SimPanel({ nodes, described }: { nodes: Record<string, SimNodeStatus>; described: Record<string, NodeState> }) {
   const names = Object.keys(nodes).sort();
   return (
     <section className="card sim">
@@ -15,17 +16,17 @@ export function SimPanel({ nodes }: { nodes: Record<string, SimNodeStatus> }) {
       )}
       <div className="sim-nodes">
         {names.map((n) => (
-          <SimNode key={n} status={nodes[n]} />
+          <SimNode key={n} status={nodes[n]} module={described[n]} />
         ))}
       </div>
     </section>
   );
 }
 
-function SimNode({ status }: { status: SimNodeStatus }) {
+function SimNode({ status, module }: { status: SimNodeStatus; module?: NodeState }) {
   const [attack, setAttack] = useState(status.attacks[0] ?? "");
   const [error, setError] = useState<string | null>(null);
-  const stale = Date.now() / 1000 - status.received_at > 5;
+  const stale = status.age_s > 5;
 
   const send = async (command: SimCommand) => {
     setError(null);
@@ -35,8 +36,11 @@ function SimNode({ status }: { status: SimNodeStatus }) {
       setError(e instanceof Error ? e.message : String(e));
     }
   };
-  const toggle = (sensor: "door" | "pir" | "lid") =>
-    send({ cmd: "set", sensor, value: status.sensors[sensor] === "1" ? 0 : 1 });
+  const toggle = (sensor: string) => send({ cmd: "set", sensor, value: status.sensors[sensor] === "1" ? 0 : 1 });
+  const info = module?.info ?? {};
+  const names = Object.keys(status.sensors);
+  const binary = names.filter((n) => info[n]?.binary ?? true);
+  const numeric = names.filter((n) => info[n] && !info[n].binary);
 
   const last = status.last_command;
   return (
@@ -56,11 +60,18 @@ function SimNode({ status }: { status: SimNodeStatus }) {
         </div>
       </div>
 
-      <div className="sim-row">
-        <button onClick={() => toggle("door")}>{status.sensors.door === "1" ? "Close door" : "Open door"}</button>
-        <button onClick={() => toggle("pir")}>{status.sensors.pir === "1" ? "Stop motion" : "Motion"}</button>
-        <button onClick={() => toggle("lid")}>{status.sensors.lid === "1" ? "Close lid" : "Open lid"}</button>
-      </div>
+      {binary.length > 0 && (
+        <div className="sim-row">
+          {binary.map((n) => (
+            <button key={n} onClick={() => toggle(n)}>
+              {toggleText(status.sensors[n] === "1", sensorLabel(n, info[n]), info[n]?.kind ?? "")}
+            </button>
+          ))}
+        </div>
+      )}
+      {numeric.map((n) => (
+        <NumericControl key={n} name={n} value={status.sensors[n]} info={info[n]} send={send} />
+      ))}
       <div className="sim-row">
         <button className="secondary" onClick={() => send({ cmd: "jam", seconds: 6 })}>Jam Wi-Fi 6 s</button>
         <button className="secondary" onClick={() => send({ cmd: "reboot", seconds: 2 })}>Reboot</button>
@@ -105,4 +116,33 @@ function describeCommand(raw: string): string {
     // not JSON: show as is
   }
   return raw;
+}
+
+function NumericControl({ name, value, info, send }: {
+  name: string;
+  value: string;
+  info: NodeState["info"][string];
+  send: (c: SimCommand) => void;
+}) {
+  const [text, setText] = useState("");
+  const alarm = alarmValue(info);
+  const set = (v: number) => send({ cmd: "set", sensor: name, value: v });
+  return (
+    <div className="sim-row numeric">
+      <span className="sim-reading">
+        {sensorLabel(name, info)} <strong>{value}{info.unit ? ` ${info.unit}` : ""}</strong>
+      </span>
+      <input
+        type="number"
+        value={text}
+        placeholder={info.unit || "value"}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && text && set(Number(text))}
+        aria-label={`${name} value`}
+      />
+      <button onClick={() => text && set(Number(text))}>Set</button>
+      {info.normal !== undefined && <button className="secondary" onClick={() => set(info.normal!)}>Normal</button>}
+      {alarm !== undefined && <button className="danger" onClick={() => set(alarm)}>Alarm</button>}
+    </div>
+  );
 }

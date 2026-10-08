@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 # Generate dev secrets: per-node master keys, broker passwords, alarm codes, log key.
-#   scripts/dev-secrets.sh [node ...]     (default: door-1)
+#   scripts/dev-secrets.sh [module ...]   (default: every module in config/modules.yaml)
 # Existing values in .secrets/dev.json are kept; only missing ones are added
 # (FORCE=1 regenerates everything). Writes .secrets/dev.json and
 # .secrets/mosquitto/passwd. Never commit these.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-[[ $# -eq 0 ]] && set -- door-1
+if [[ $# -eq 0 ]]; then
+  # Every module described in config/modules.yaml (falls back to door-1).
+  set -- $(python3 -c '
+import re, sys
+try:
+    text = open("config/modules.yaml").read()
+except OSError:
+    sys.exit()
+body = text.split("modules:", 1)[-1]
+print(" ".join(re.findall(r"^  ([a-z0-9-]{1,16}):\s*$", body, re.M)))
+')
+  [[ $# -eq 0 ]] && set -- door-1
+fi
 mkdir -p .secrets/mosquitto
 chmod 700 .secrets
 [[ "${FORCE:-}" == 1 ]] && rm -f .secrets/dev.json
@@ -26,19 +38,20 @@ def code_hash(code):
     return f"pbkdf2_sha256$200000${salt.hex()}${h.hex()}"
 
 d.setdefault("broker", {"host": "127.0.0.1", "port": 1883})
-for account in ("hub", "ctl", "api", "camera", "notifier", "attacker"):
+for account in ("hub", "ctl", "api", "camera", "detector", "notifier", "attacker"):
     d.setdefault(account, {"password": pw()})
 nodes = d.setdefault("nodes", {})
 for n in sys.argv[1:]:
     nodes.setdefault(n, {"key": secrets.token_hex(32), "password": pw()})
 d.setdefault("log_key", secrets.token_hex(32))
+d.setdefault("grafana", {"admin_password": pw()})
 # DEV ONLY codes: 1234 disarms, 9999 is the duress code.
 d.setdefault("codes", {"user": [code_hash("1234")], "duress": [code_hash("9999")]})
 
 path.write_text(json.dumps(d, indent=2) + "\n")
 path.chmod(0o600)
 
-users = {a: d[a]["password"] for a in ("hub", "ctl", "api", "camera", "notifier", "attacker")}
+users = {a: d[a]["password"] for a in ("hub", "ctl", "api", "camera", "detector", "notifier", "attacker")}
 users |= {n: v["password"] for n, v in nodes.items()}
 Path(".secrets/mosquitto/passwd").write_text("".join(f"{u}:{p}\n" for u, p in users.items()))
 print("accounts:", ", ".join(users))

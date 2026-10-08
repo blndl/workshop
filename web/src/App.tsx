@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { CameraTab } from "./components/CameraTab";
 import { Keypad } from "./components/Keypad";
 import { Metrics } from "./components/Metrics";
+import { MetricsTab } from "./components/MetricsTab";
 import { NodeCard } from "./components/NodeCard";
 import { SimPanel } from "./components/SimPanel";
 import { StatusPanel } from "./components/StatusPanel";
@@ -10,22 +12,41 @@ import { usePoll } from "./usePoll";
 
 const RSSI_POINTS = 120; // 2 minutes at one sample per second
 
+type Tab = "overview" | "camera" | "metrics";
+const TABS: Tab[] = ["overview", "camera", "metrics"];
+const tabFromHash = (): Tab => TABS.find((t) => window.location.hash === `#${t}`) ?? "overview";
+
 export function App() {
   const state = usePoll(api.state, 1000);
   const events = usePoll(() => api.events(500), 2000);
   const health = usePoll(api.health, 3000);
   const sim = usePoll(api.sim, 1000);
-  const [rssi, setRssi] = useState<Record<string, number[]>>({});
+  // Rolling history per module: Wi-Fi signal (key "__rssi") and every numeric sensor.
+  const [history, setHistory] = useState<Record<string, Record<string, number[]>>>({});
+  const [tab, setTab] = useState<Tab>(tabFromHash);
+
+  // The tab lives in the URL (#metrics), so it survives a reload and can be linked.
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   // Keep a rolling signal-strength history per node, one point per state update.
   useEffect(() => {
     const nodes = state.data?.nodes;
     if (!nodes) return;
-    setRssi((prev) => {
-      const next = { ...prev };
+    setHistory((prev) => {
+      const next: typeof prev = {};
       for (const [name, n] of Object.entries(nodes)) {
-        if (n.rssi == null) continue;
-        next[name] = [...(prev[name] ?? []), n.online ? n.rssi : -90].slice(-RSSI_POINTS);
+        const h = { ...(prev[name] ?? {}) };
+        const push = (key: string, v: number) => (h[key] = [...(h[key] ?? []), v].slice(-RSSI_POINTS));
+        if (n.rssi != null) push("__rssi", n.online ? n.rssi : -90);
+        for (const [s, info] of Object.entries(n.info ?? {})) {
+          const v = Number(n.sensors[s]);
+          if (!info.binary && Number.isFinite(v)) push(s, v);
+        }
+        next[name] = h;
       }
       return next;
     });
@@ -41,8 +62,19 @@ export function App() {
         <span className={connected ? "pill ok" : "pill bad"}>
           {connected ? "connected" : state.error ? "API unreachable" : "alarm-core not responding"}
         </span>
+        <nav className="tabs" aria-label="views">
+          <a href="#overview" className={tab === "overview" ? "tab active" : "tab"}>Overview</a>
+          <a href="#camera" className={tab === "camera" ? "tab active" : "tab"}>Camera</a>
+          <a href="#metrics" className={tab === "metrics" ? "tab active" : "tab"}>Metrics</a>
+        </nav>
       </header>
 
+      {tab === "metrics" ? (
+        <MetricsTab />
+      ) : tab === "camera" ? (
+        <CameraTab />
+      ) : (
+      <>
       <main className="grid">
         <div className="col">
           <StatusPanel state={state.data} />
@@ -50,7 +82,7 @@ export function App() {
         </div>
         <div className="col">
           {nodes.map(([name, n]) => (
-            <NodeCard key={name} name={name} node={n} rssiHistory={rssi[name] ?? []} />
+            <NodeCard key={name} id={name} node={n} history={history[name] ?? {}} />
           ))}
           <Metrics events={events.data ?? []} />
         </div>
@@ -59,7 +91,9 @@ export function App() {
         </div>
       </main>
 
-      {sim.data?.enabled && <SimPanel nodes={sim.data.nodes} />}
+      {sim.data?.enabled && <SimPanel nodes={sim.data.nodes} described={state.data?.nodes ?? {}} />}
+      </>
+      )}
     </div>
   );
 }

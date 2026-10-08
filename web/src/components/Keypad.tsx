@@ -23,7 +23,7 @@ export function Keypad() {
     setBusy(true);
     try {
       const { body } = await (action === "arm" ? api.arm(code) : api.disarm(code));
-      const detail = Array.isArray(body.detail) ? `: ${body.detail.join(", ")}` : "";
+      const detail = Array.isArray(body.detail) ? `: ${body.detail.join(", ")}` : body.detail ? `: ${body.detail}` : "";
       const ok = body.result === "ok" || body.result === "no_change";
       setMessage({ text: MESSAGES[body.result] + detail, ok });
     } catch (e) {

@@ -1,0 +1,34 @@
+# The modules plugged into the core. One entry per field module (an ESP, or a
+# simulated one). The core reads this at startup; restart alarm-core after a change.
+# Each module also needs a key: scripts/dev-secrets.sh creates one for every
+# module listed here. Format and roles: docs/modules.md
+#
+# Roles:  entry      when armed, starts the entry delay
+#         instant    when armed, triggers immediately
+#         tamper     always watched (triggers when armed, warns when disarmed)
+#         safety     alarms whatever the arm state (gas, smoke, water...)
+#         telemetry  never alarms; charted
+#
+# confirm: person (entry/instant sensors): when armed, the camera takes a burst
+# and the detector must see a person before the sensor counts. No person: the
+# motion is dismissed (a cat, a curtain). Detector down or too slow: it counts.
+
+modules:
+  door-1:
+    type: entry
+    name: Front door
+    sensors:
+      door: {kind: contact, role: entry, label: Door}
+      pir:  {kind: motion,  role: entry, label: Motion, confirm: person}   # the camera must see someone
+      lid:  {kind: tamper,  role: tamper, label: Lid}
+    outputs: [buzzer, led]
+
+  env-1:
+    type: environment
+    name: Kitchen
+    sensors:
+      gas:  {kind: gas,         role: safety,    unit: ppm, alarm_above: 400, normal: 120, label: Gas}
+      temp: {kind: temperature, role: safety,    unit: °C,  alarm_above: 57,  normal: 21,  label: Temperature}
+      hum:  {kind: humidity,    role: telemetry, unit: "%", normal: 45, label: Humidity}
+      lid:  {kind: tamper,      role: tamper, label: Lid}
+    outputs: [buzzer, led]

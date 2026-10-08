@@ -15,9 +15,11 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 
 | Profile | Containers | Started by |
 |---|---|---|
-| (none) | `mosquitto`, `ntfy` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
-| `hub` | + `alarm-core`, `api`, `camera`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
-| `sim` | + `door-1` (simulated ESP) | `scripts/sim.sh up` (together with `hub`) |
+| (none) | `mosquitto`, `ntfy`, `postgres` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
+| `hub` | + `alarm-core`, `api`, `camera`, `detector`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
+| `sim` | + `door-1`, `env-1` (simulated modules, one container each) | `scripts/sim.sh up` (together with `hub`) |
+| `sim-cpp` | `env-1-cpp`: env-1 from the C++ edge simulator | `ENV_NODE=cpp scripts/sim.sh up` (replaces the Python env-1) |
+| `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `cadvisor` | with `sim.sh up`/`hub` unless `NO_MONITORING=1` ([details](../monitoring/README.md)) |
 | `probe` | `probe` (runs once) | `scripts/sim.sh probe` |
 
 ## Networks
@@ -25,7 +27,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 ```
   iot network (the house Wi-Fi)          core network (inside the box)
  ┌───────────────────────────┐         ┌──────────────────────────────────────┐
- │  door-1 (simulated ESP)   │         │  alarm-core   api   camera   notifier │
+ │  door-1, env-1 (modules)  │         │  alarm-core   api   camera   notifier │
  │  probe                    ├─ mosquitto ─┤             ntfy                    │
  └───────────────────────────┘         └──────────────────────────────────────┘
 ```
@@ -37,6 +39,7 @@ From the iot network (a device on the house Wi-Fi):
   OK   mosquitto:1883  open          broker: nodes must reach it
   OK   api:8000        unknown host  web API / dashboard
   OK   ntfy:80         unknown host  alert server
+  OK   postgres:5432     unknown host  event database
   ...
 segmentation OK
 ```
@@ -47,6 +50,7 @@ segmentation OK
 |---|---|---|---|
 | 8000 | dashboard + API | 127.0.0.1 only (no login yet) | `API_PORT=8001 scripts/sim.sh up` |
 | 1883 | MQTT broker | 127.0.0.1 | `MQTT_BIND=0.0.0.0` to let a real ESP on the LAN connect |
+| 3000 | Grafana (also embedded in the dashboard's Metrics tab) | 127.0.0.1 | `GRAFANA_PORT` |
 | 8080 | ntfy (alerts) | all interfaces, so a phone on the same network can reach it | |
 
 ## Settings
@@ -59,7 +63,7 @@ Environment variables read by `compose.yml` (set them before `scripts/sim.sh` or
 | `ALARM_SIM` | 0 (1 with `sim.sh up`) | Show the simulator panel on the dashboard |
 | `API_PORT` | 8000 | Host port for the dashboard |
 | `MQTT_BIND` | 127.0.0.1 | Host address the broker listens on |
-| `CAMERA_SOURCE` | `--fake` | Camera input: `--fake` (generated frames), `--images=/app/data/test-images`, or `--device=0` |
+| `CAMERA_SOURCE` | `--fake` | Camera input: `--fake` (generated frames, nobody in them), `--images=/app/data/test-images` (cycles through your photos: put people in them to see motion confirmed), or `--device=0` (Linux webcam) |
 | `NTFY_BASE_URL` | set by `scripts/dev-ntfy.sh` | Address the phone uses for ntfy (attachment links) |
 
 ## Data and secrets
@@ -67,11 +71,16 @@ Environment variables read by `compose.yml` (set them before `scripts/sim.sh` or
 - `../../.secrets` is mounted **read-only** into every container (keys, passwords, codes). It's never in the image.
 - The service containers run as **your** user ID (`HOST_UID`/`HOST_GID`, set by `scripts/sim.sh`), so they can read `.secrets/` (mode 700) and write `data/`. Calling `docker compose` directly on Linux? Export them first: `export HOST_UID=$(id -u) HOST_GID=$(id -g)`.
 - `../../data` is mounted read-write: `events.jsonl` (the log) and `snapshots/` (photos). It survives `sim.sh down`, so you can check it from the host with `verify-log`.
+- The event database lives in a Docker volume (`alarm_postgres-data`). The API waits for its healthcheck before starting, and backfills anything missing from `data/events.jsonl` (see [services/api/README.md](../../services/api/README.md)).
 - ntfy accounts live in a Docker volume (`alarm_ntfy-auth`), kept across restarts. `docker compose … down -v` deletes them; rerun `FORCE=1 scripts/dev-ntfy.sh` after that.
+
+## Module descriptions
+
+`../../config` is mounted read-only into every service container, so editing `config/modules.yaml` needs no rebuild: restart alarm-core (`docker compose -f infra/docker/compose.yml restart alarm-core`). A new module also needs `scripts/dev-secrets.sh`, a Mosquitto restart, and, to simulate it, a container in the `sim` profile ([docs/modules.md](../../docs/modules.md)).
 
 ## Using a real ESP
 
-Start the box with the broker open to the LAN: `MQTT_BIND=0.0.0.0 scripts/sim.sh hub`. Then point the ESP at this machine's IP, port 1883, with its node key and password from `.secrets/dev.json`. The protocol encrypts everything, so an open broker port is expected; the ACL limits each node to its own topics.
+Start the box with the broker open to the LAN: `MQTT_BIND=0.0.0.0 scripts/sim.sh hub`. Then point the ESP at this machine's IP, port 1883, with its module key and password from `.secrets/dev.json`. Stop the simulated copy of that module first (`docker compose -f infra/docker/compose.yml stop door-1`): two devices with the same identity would fight over the session. The protocol encrypts everything, so an open broker port is expected; the ACL limits each node to its own topics.
 
 ## Webcam
 

@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]' -e 'services/api[dev]'
+        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]' -e 'services/api[dev]' -e 'services/detector[dev]'
       - name: Protocol tests
         run: pytest -q protocol/python
       - name: Test vectors are up to date
@@ -32,6 +32,8 @@ jobs:
         run: pytest -q services/notifier
       - name: api tests
         run: pytest -q services/api
+      - name: detector tests
+        run: pytest -q services/detector   # the real-model test is skipped without models/
 
   web:
     runs-on: ubuntu-latest
@@ -55,23 +57,42 @@ jobs:
       - name: Secrets for the test stack
         run: scripts/dev-secrets.sh
       - name: Build and start the box + simulated ESP
-        run: scripts/sim.sh up
-      - name: alarm-core sees the node
+        run: NO_MONITORING=1 scripts/sim.sh up   # monitoring isn't needed to test the alarm
+      - name: alarm-core sees every module
         run: |
           # The step runs with bash -e: keep each attempt inside `if` so a
           # failure (container still starting) retries instead of aborting.
           for i in $(seq 30); do
-            if scripts/sim.sh status 2>/dev/null | grep -q '"online": true'; then
-              echo "node online after $((i * 2)) s"; exit 0
+            if curl -sf localhost:8000/api/state | python3 -c 'import json,sys; n=json.load(sys.stdin)["nodes"]; sys.exit(not (n and all(m["online"] for m in n.values())))'; then
+              echo "all modules online after $((i * 2)) s"; exit 0
             fi
             sleep 2
           done
-          echo "node never came online"; exit 1
+          echo "modules never all came online"; curl -s localhost:8000/api/state; exit 1
       - name: Arm through the API
         run: |
           curl -sf -X POST -H 'content-type: application/json' -d '{"code":"1234"}' localhost:8000/api/arm
       - name: Network segmentation
         run: scripts/sim.sh probe
+      - name: C++ env module raises a safety alarm (edge simulator, gas_leak)
+        run: |
+          ENV_NODE=cpp ENV_SCENARIO=gas_leak NO_MONITORING=1 scripts/sim.sh up
+          for i in $(seq 45); do
+            if curl -sf localhost:8000/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(not any(a["node"] == "env-1" and a["sensor"] == "gas" for a in d["safety"]))'; then
+              echo "safety alarm from the C++ module after $((i * 2)) s"; exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f infra/docker/compose.yml --profile sim-cpp logs env-1-cpp; exit 1
       - name: Logs on failure
         if: failure()
         run: docker compose -f infra/docker/compose.yml --profile hub --profile sim logs
+
+  cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: C++ protocol against the test vectors
+        run: docker build -f protocol/cpp/Dockerfile.test protocol
+      - name: Edge simulator + alarm-node (builds and runs both test suites)
+        run: docker build -f IA_VISON/edge-simulator/Dockerfile.alarm -t alarm-node .

@@ -32,6 +32,7 @@ RUN pip install \
       -e 'services/camera[webcam]' \
       -e services/notifier \
       -e services/api \
+      -e services/detector \
  && mkdir -p /app/data && chown alarm /app/data
 COPY --from=web /web/dist web/dist
 

@@ -20,6 +20,10 @@ alarm_camera/
 | Entry delay starts | Burst of 3 (0, 0.7, 1.4 s) |
 | Alarm triggered | Burst of 3, then 1 every 5 s for 60 s |
 | Duress code used | Burst of 3, silently, even though the system then shows as disarmed |
+| Motion to verify (`verify` event) | Burst of 3 (`verify-1..3`), analysed by the detector |
+| Live view started (while disarmed) | **No photos**: the camera is on for watching only, until the live view ends (2 min) |
+
+While the camera is on, it also streams **live frames** (2 per second, JPEG) on `alarm/camera/frame`, and publishes its status on `alarm/camera/status` (retained: on or off and why, source, frame count). The status carries no file names, so a duress photo can't be spotted through it. The API turns the frames into the dashboard's live feed.
 
 Snapshots older than **30 days** are deleted (CNIL guidance for video surveillance; change with `--retention-days`).
 
