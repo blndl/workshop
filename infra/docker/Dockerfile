@@ -12,10 +12,11 @@ RUN npm run build
 
 # --- services ----------------------------------------------------------------
 FROM python:3.12-slim
-ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1
+# HOME=/tmp: compose may run the container as a host UID that has no home here.
+ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 HOME=/tmp
 
-# Run as an unprivileged user. UID matches the usual first Linux user so the
-# bind-mounted data/ folder stays writable on a Linux host.
+# Run as an unprivileged user. compose.yml overrides the UID with the host
+# user's (HOST_UID), so bind-mounted .secrets/ and data/ stay accessible.
 ARG UID=1000
 RUN useradd --create-home --uid ${UID} alarm
 

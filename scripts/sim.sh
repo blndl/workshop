@@ -14,6 +14,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 COMPOSE=(docker compose -f infra/docker/compose.yml)
+# Containers run as you, so they can read .secrets/ and write data/ (see compose.yml).
+export HOST_UID=$(id -u) HOST_GID=$(id -g)
 
 need_secrets() {
   [[ -f .secrets/dev.json ]] || { echo "no secrets yet: run scripts/dev-secrets.sh first" >&2; exit 1; }

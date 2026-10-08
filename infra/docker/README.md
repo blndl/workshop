@@ -65,6 +65,7 @@ Environment variables read by `compose.yml` (set them before `scripts/sim.sh` or
 ## Data and secrets
 
 - `../../.secrets` is mounted **read-only** into every container (keys, passwords, codes). It's never in the image.
+- The service containers run as **your** user ID (`HOST_UID`/`HOST_GID`, set by `scripts/sim.sh`), so they can read `.secrets/` (mode 700) and write `data/`. Calling `docker compose` directly on Linux? Export them first: `export HOST_UID=$(id -u) HOST_GID=$(id -g)`.
 - `../../data` is mounted read-write: `events.jsonl` (the log) and `snapshots/` (photos). It survives `sim.sh down`, so you can check it from the host with `verify-log`.
 - ntfy accounts live in a Docker volume (`alarm_ntfy-auth`), kept across restarts. `docker compose … down -v` deletes them; rerun `FORCE=1 scripts/dev-ntfy.sh` after that.
 
