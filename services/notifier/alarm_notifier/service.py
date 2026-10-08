@@ -35,8 +35,10 @@ class NotifierService:
         snapshots_dir: Path | None = None,
         rules: Rules | None = None,
         log: Callable[[str], None] = print,
+        extra_backends=None,
     ):
         self.backend = backend
+        self.extra_backends = extra_backends or []
         self.transport = transport
         self.snapshots_dir = Path(snapshots_dir) if snapshots_dir else None
         self.rules = rules or Rules()
@@ -107,6 +109,8 @@ class NotifierService:
             p.attempts += 1
             try:
                 self.backend.send(p.alert)
+                for backend in self.extra_backends:
+                    backend.send(p.alert)
             except SendError as e:
                 if e.permanent or now - p.created > GIVE_UP_AFTER:
                     self.log(f"[notifier] DROPPED '{p.alert.title}' after {p.attempts} attempt(s): {e}")

@@ -1,3 +1,4 @@
+
 """Persist alarm events in PostgreSQL without slowing down or losing them.
 
 The MQTT handler only calls EventStore.put(), which never blocks: events go
@@ -178,3 +179,4 @@ class EventStore:
         self._backfilled = True
         if missing:
             self.log(f"[db] backfilled {len(missing)} event(s) from {self.backfill_from.name} (seq > {last})")
+

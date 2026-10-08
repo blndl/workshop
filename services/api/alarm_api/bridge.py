@@ -18,6 +18,7 @@ import time
 from collections import deque
 
 
+
 CONTROL_TOPIC = "alarm/control"
 EVENTS_TOPIC = "alarm/events"
 STATE_TOPIC = "alarm/state"
@@ -161,6 +162,7 @@ class Bridge:
         except ValueError:
             return
 
+
         if not isinstance(e, dict) or hidden(e):
             return
 
@@ -171,6 +173,7 @@ class Bridge:
                 self.store.put(e)
             for listener in self.listeners:
                 listener(e)
+
 
         with self._lock:
             if e.get("type") not in REPLIES:
@@ -199,7 +202,9 @@ class Bridge:
         action: str,
         code: str | None = None,
         source: str = "api",
+
         **extra,  # more request fields, e.g. on=True for live_view
+
     ) -> list[dict]:
         """Send a request; return the events alarm-core emitted for it."""
 
