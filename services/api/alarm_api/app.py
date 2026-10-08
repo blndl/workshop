@@ -38,8 +38,9 @@ class SimCommand(BaseModel):
     """A command for a simulated node (see simulator/alarm_sim/control.py)."""
 
     cmd: Literal["set", "jam", "reboot", "attack"]
-    sensor: Literal["door", "pir", "lid"] | None = None
-    value: Literal[0, 1] | None = None
+    # Any sensor the module describes (the simulated node checks it against its description).
+    sensor: str | None = Field(None, pattern=r"^[a-z][a-z0-9_]{0,15}$")
+    value: float | None = Field(None, ge=-100_000, le=100_000)  # 0/1 for on/off sensors
     seconds: float | None = Field(None, ge=0.5, le=60)
     name: str | None = Field(None, pattern=r"^[a-z_]{1,24}$")
     args: dict[str, int | str] | None = None
@@ -55,6 +56,8 @@ def outcome(events: list[dict]) -> dict:
         return {"result": "locked", "detail": "codes are locked after too many wrong attempts"}
     if "bad_code" in by_type:
         return {"result": "bad_code", "detail": "wrong code"}
+    if "safety_silenced" in by_type and "state" not in by_type:
+        return {"result": "ok", "detail": "safety alarm silenced", "silenced": by_type["safety_silenced"].get("alarms", [])}
     if "arm_refused" in by_type:
         return {"result": "arm_refused", "detail": by_type["arm_refused"].get("problems", [])}
     if "state" in by_type:
@@ -141,7 +144,11 @@ def create_app(bridge: Bridge, web_dir: Path | None = None, grafana_url: str | N
     @app.get("/api/sim")
     def sim_info():
         """Whether the simulator panel is enabled, and the simulated nodes seen."""
-        return {"enabled": bridge.sim, "nodes": bridge.sim_nodes if bridge.sim else {}}
+        if not bridge.sim:
+            return {"enabled": False, "nodes": {}}
+        now = time.time()  # age computed here: the browser's clock may differ from the server's
+        return {"enabled": True,
+                "nodes": {n: {**st, "age_s": round(now - st.get("received_at", now), 1)} for n, st in bridge.sim_nodes.items()}}
 
     @app.post("/api/sim/{node}/command", status_code=202)
     def sim_command(cmd: SimCommand, node: str = PathParam(pattern=r"^[a-z0-9-]{1,16}$")):

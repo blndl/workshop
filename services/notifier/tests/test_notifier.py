@@ -171,3 +171,12 @@ def test_ntfy_errors_classified(ntfy_server):
     with pytest.raises(SendError) as e:
         NtfyBackend("http://127.0.0.1:9", "x", timeout=1).send(Alert("t", "m"))
     assert not e.value.permanent
+
+
+def test_safety_alerts():
+    gas = build({"type": "safety_alarm", "node": "env-1", "sensor": "gas", "kind": "gas", "value": "650.0",
+                 "unit": "ppm", "threshold": 400.0})
+    assert gas.priority == 5 and gas.title == "SAFETY ALARM: gas"
+    assert gas.message.startswith("650.0 ppm (limit 400 ppm) on env-1 (gas).")
+    assert build({"type": "safety_clear", "node": "env-1", "sensor": "gas", "value": "120.0"}).priority == 3
+    assert build({"type": "safety_silenced", "source": "api", "alarms": ["env-1 gas"]}).priority == 3

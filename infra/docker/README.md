@@ -17,7 +17,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 |---|---|---|
 | (none) | `mosquitto`, `ntfy`, `postgres` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
 | `hub` | + `alarm-core`, `api`, `camera`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
-| `sim` | + `door-1` (simulated ESP) | `scripts/sim.sh up` (together with `hub`) |
+| `sim` | + `door-1`, `env-1` (simulated modules, one container each) | `scripts/sim.sh up` (together with `hub`) |
 | `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `cadvisor` | with `sim.sh up`/`hub` unless `NO_MONITORING=1` ([details](../monitoring/README.md)) |
 | `probe` | `probe` (runs once) | `scripts/sim.sh probe` |
 
@@ -26,7 +26,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 ```
   iot network (the house Wi-Fi)          core network (inside the box)
  ┌───────────────────────────┐         ┌──────────────────────────────────────┐
- │  door-1 (simulated ESP)   │         │  alarm-core   api   camera   notifier │
+ │  door-1, env-1 (modules)  │         │  alarm-core   api   camera   notifier │
  │  probe                    ├─ mosquitto ─┤             ntfy                    │
  └───────────────────────────┘         └──────────────────────────────────────┘
 ```
@@ -73,9 +73,13 @@ Environment variables read by `compose.yml` (set them before `scripts/sim.sh` or
 - The event database lives in a Docker volume (`alarm_postgres-data`). The API waits for its healthcheck before starting, and backfills anything missing from `data/events.jsonl` (see [services/api/README.md](../../services/api/README.md)).
 - ntfy accounts live in a Docker volume (`alarm_ntfy-auth`), kept across restarts. `docker compose … down -v` deletes them; rerun `FORCE=1 scripts/dev-ntfy.sh` after that.
 
+## Module descriptions
+
+`../../config` is mounted read-only into every service container, so editing `config/modules.yaml` needs no rebuild: restart alarm-core (`docker compose -f infra/docker/compose.yml restart alarm-core`). A new module also needs `scripts/dev-secrets.sh`, a Mosquitto restart, and, to simulate it, a container in the `sim` profile ([docs/modules.md](../../docs/modules.md)).
+
 ## Using a real ESP
 
-Start the box with the broker open to the LAN: `MQTT_BIND=0.0.0.0 scripts/sim.sh hub`. Then point the ESP at this machine's IP, port 1883, with its node key and password from `.secrets/dev.json`. The protocol encrypts everything, so an open broker port is expected; the ACL limits each node to its own topics.
+Start the box with the broker open to the LAN: `MQTT_BIND=0.0.0.0 scripts/sim.sh hub`. Then point the ESP at this machine's IP, port 1883, with its module key and password from `.secrets/dev.json`. Stop the simulated copy of that module first (`docker compose -f infra/docker/compose.yml stop door-1`): two devices with the same identity would fight over the session. The protocol encrypts everything, so an open broker port is expected; the ACL limits each node to its own topics.
 
 ## Webcam
 

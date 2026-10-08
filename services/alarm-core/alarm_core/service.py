@@ -109,10 +109,13 @@ class AlarmService:
                 self.machine.security(node, e.kind, e.detail, now)
 
     def _sync_outputs(self, now: float) -> None:
-        wanted = self.machine.outputs()
+        all_outputs = self.machine.outputs()
         for node in self.hub.nodes():
             if not self.hub.has_session(node):
                 continue
+            module = self.machine.modules.get(node)
+            # Only the outputs this module declares (a sensor-only module gets none).
+            wanted = {k: v for k, v in all_outputs.items() if module is None or k in module.outputs}
             if self._sent_outputs.get(node) != wanted:
                 self._send(node, wanted)
                 self._sent_outputs[node] = wanted

@@ -23,12 +23,15 @@ from . import scenario as scenario_mod
 from .attacks import ATTACKS, Attacker
 from .control import SimControl
 from .devhub import DevHub
-from .node import SENSORS, SimNode
+from alarm_protocol.modules import ModuleError, load as load_modules
+
+from .node import SimNode
 from alarm_protocol.transport import MemoryBus, MqttTransport
 
 REPO = Path(__file__).resolve().parents[2]
 DEFAULT_SECRETS = REPO / ".secrets" / "dev.json"
 SCENARIOS = Path(__file__).resolve().parents[1] / "scenarios"
+DEFAULT_MODULES = REPO / "config" / "modules.yaml"
 
 
 class FakeClock:
@@ -123,8 +126,8 @@ def cmd_hub(args) -> int:
 
 # --- live node ----------------------------------------------------------------
 
-NODE_HELP = f"""commands:
-  <sensor> 0|1          set a sensor ({', '.join(SENSORS)})
+NODE_HELP = """commands:
+  <sensor> <value>      set a sensor: 0|1 for on/off ones, a number for the others ({sensors})
   jam <seconds>         radio silence, then reconnect
   reboot [seconds]      reboot (default 2 s offline)
   attack <name> [k=v]   {', '.join(ATTACKS)}
@@ -141,7 +144,16 @@ def cmd_node(args) -> int:
         host, port, args.node, cfg["password"], client_id=f"sim-{args.node}",
         will=(status_topic(args.node), "offline"),
     )
-    node = SimNode(args.node, bytes.fromhex(cfg["key"]), transport)
+    module = None
+    try:
+        module = load_modules(args.modules).modules.get(args.node)
+    except ModuleError as e:
+        print(f"[{args.node}] {e}")
+    if module is None:
+        print(f"[{args.node}] not described in {args.modules}: simulating a door module")
+    node = SimNode(args.node, bytes.fromhex(cfg["key"]), transport, module=module)
+    print(f"[{args.node}] {node.module.type} module, sensors: " + ", ".join(
+        f"{n} ({'0/1' if s.binary else s.unit or 'number'})" for n, s in node.module.sensors.items()))
     attacker = None
     if "attacker" in secrets:
         a_transport = MqttTransport(host, port, "attacker", secrets["attacker"]["password"], client_id=f"attacker-{args.node}")
@@ -167,7 +179,7 @@ def cmd_node(args) -> int:
 
 
 def _interactive(node: SimNode, attacker: Attacker | None, control: SimControl) -> int:
-    print(NODE_HELP)
+    print(NODE_HELP.format(sensors=", ".join(node.module.sensors)))
     lines = _stdin_lines()
     while True:
         now = time.monotonic()
@@ -199,11 +211,11 @@ def _node_command(node: SimNode, attacker: Attacker | None, parts: list[str], no
     if cmd == "quit":
         return "quit"
     if cmd == "help":
-        print(NODE_HELP)
+        print(NODE_HELP.format(sensors=", ".join(node.module.sensors)))
     elif cmd == "status":
         sid = node.channel.keys.sid if node.channel else "-"
         print(f"state={node.state} session={sid} sensors={node.sensors} outputs={node.outputs}")
-    elif cmd in SENSORS and len(rest) == 1:
+    elif cmd in node.module.sensors and len(rest) == 1:
         node.set(now, **{cmd: rest[0]})
     elif cmd == "jam" and len(rest) == 1:
         node.jam(now, float(rest[0]))
@@ -260,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     n.add_argument("--node", default="door-1")
     n.add_argument("--scenario", help="run a scenario file instead of interactive mode")
     n.add_argument("--headless", action="store_true", help="no terminal input; control from the dashboard only")
+    n.add_argument("--modules", type=Path, default=DEFAULT_MODULES, help="module descriptions (config/modules.yaml)")
 
     args = p.parse_args(argv)
     return {"selftest": cmd_selftest, "hub": cmd_hub, "node": cmd_node}[args.cmd](args)

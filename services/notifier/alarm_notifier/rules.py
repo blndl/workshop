@@ -39,6 +39,18 @@ def build(e: dict) -> Alert | None:
         if state == "disarmed" and prev != "disarmed":
             return Alert("Disarmed", reason.capitalize() + ".", 2, ["unlock"])
         return None
+    if t == "safety_alarm":
+        unit = f" {e['unit']}" if e.get("unit") else ""
+        limit = f" (limit {e['threshold']:g}{unit})" if isinstance(e.get("threshold"), (int, float)) else ""
+        return Alert(f"SAFETY ALARM: {e.get('kind', 'sensor')}",
+                     f"{e.get('value')}{unit}{limit} on {e.get('node')} ({e.get('sensor')}). "
+                     "It sounds whether or not the system is armed.", 5, ["rotating_light", "fire"])
+    if t == "safety_clear":
+        return Alert("Safety alarm cleared", f"{e.get('sensor')} back to normal ({e.get('value')}){_node(e)}.", 3,
+                     ["white_check_mark"])
+    if t == "safety_silenced":
+        return Alert("Safety alarm silenced", f"Silenced by {e.get('source', '?')}: {', '.join(e.get('alarms', []))}. "
+                     "It stays active until the sensor clears.", 3, ["mute"])
     if t == "duress":
         return Alert("DURESS CODE USED",
                      f"The system was disarmed with the duress code (source: {e.get('source', '?')}). "

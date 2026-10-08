@@ -196,17 +196,15 @@ cause a denial of service.
 
 ### Sensor fields (`HB`, `EVT`)
 
-| Key | Values | Meaning |
-|---|---|---|
-| `door` | `0` closed / `1` open | Reed switch |
-| `pir` | `0` / `1` motion | PIR sensor |
-| `lid` | `0` closed / `1` open | Enclosure tamper switch |
-| `up` | seconds since boot | Uptime; a sudden drop means a reboot |
-| `rssi` | dBm, e.g. `-61` | Wi-Fi signal strength; a sudden fall can indicate jamming |
+The sensors depend on the module. They're declared in `config/modules.yaml` ([docs/modules.md](../docs/modules.md)), and the sensor names there are the field keys here.
 
-A node only sends the sensors it actually has. The heartbeat always
-carries the full current state, so if an `EVT` is lost the hub catches up
-within a second.
+- **On/off sensors** (door contact, motion, tamper…): `0` or `1`.
+- **Numeric sensors** (gas, temperature, humidity…): a plain decimal such as `21.4` or `-3.0`, with no unit. The unit and the alarm threshold live in the description, not on the wire.
+- Every module also sends `up` (seconds since boot; a sudden drop means a reboot) and `rssi` (Wi-Fi signal in dBm; a sudden fall can indicate jamming).
+
+The door module (`door-1`) sends `door`, `pir` and `lid`. The environment module (`env-1`) sends `gas`, `temp`, `hum` and `lid`.
+
+The heartbeat always carries the full current state, so if an `EVT` is lost the hub catches up within a second. The core ignores values it can't read and keeps the last good one.
 
 ### Commands (`CMD`)
 
