@@ -82,7 +82,12 @@ def create_app(bridge: Bridge, web_dir: Path | None = None) -> FastAPI:
     @app.get("/api/health")
     def health():
         age = None if bridge.state_received_at is None else round(time.time() - bridge.state_received_at, 1)
-        return {"mqtt_connected": bridge.connected, "state_received": bridge.state is not None, "state_age_s": age}
+        db = None
+        if bridge.store is not None:
+            db = {"connected": bridge.store.connected, "pending": bridge.store.pending,
+                  "written": bridge.store.written, "dropped": bridge.store.dropped}
+        return {"mqtt_connected": bridge.connected, "state_received": bridge.state is not None,
+                "state_age_s": age, "database": db}
 
     @app.get("/api/state")
     def state():

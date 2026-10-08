@@ -15,7 +15,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 
 | Profile | Containers | Started by |
 |---|---|---|
-| (none) | `mosquitto`, `ntfy` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
+| (none) | `mosquitto`, `ntfy`, `postgres` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
 | `hub` | + `alarm-core`, `api`, `camera`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
 | `sim` | + `door-1` (simulated ESP) | `scripts/sim.sh up` (together with `hub`) |
 | `probe` | `probe` (runs once) | `scripts/sim.sh probe` |
@@ -37,6 +37,7 @@ From the iot network (a device on the house Wi-Fi):
   OK   mosquitto:1883  open          broker: nodes must reach it
   OK   api:8000        unknown host  web API / dashboard
   OK   ntfy:80         unknown host  alert server
+  OK   postgres:5432     unknown host  event database
   ...
 segmentation OK
 ```
@@ -67,6 +68,7 @@ Environment variables read by `compose.yml` (set them before `scripts/sim.sh` or
 - `../../.secrets` is mounted **read-only** into every container (keys, passwords, codes). It's never in the image.
 - The service containers run as **your** user ID (`HOST_UID`/`HOST_GID`, set by `scripts/sim.sh`), so they can read `.secrets/` (mode 700) and write `data/`. Calling `docker compose` directly on Linux? Export them first: `export HOST_UID=$(id -u) HOST_GID=$(id -g)`.
 - `../../data` is mounted read-write: `events.jsonl` (the log) and `snapshots/` (photos). It survives `sim.sh down`, so you can check it from the host with `verify-log`.
+- The event database lives in a Docker volume (`alarm_postgres-data`). The API waits for its healthcheck before starting, and backfills anything missing from `data/events.jsonl` (see [services/api/README.md](../../services/api/README.md)).
 - ntfy accounts live in a Docker volume (`alarm_ntfy-auth`), kept across restarts. `docker compose … down -v` deletes them; rerun `FORCE=1 scripts/dev-ntfy.sh` after that.
 
 ## Using a real ESP
