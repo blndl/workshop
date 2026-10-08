@@ -3,7 +3,7 @@ name = "alarm-api"
 version = "0.1.0"
 description = "Web API for the alarm"
 requires-python = ">=3.11"
-dependencies = ["alarm-protocol[mqtt]", "fastapi>=0.110", "uvicorn>=0.27"]
+dependencies = ["alarm-protocol[mqtt]", "fastapi>=0.110", "uvicorn>=0.27","psycopg[binary]>=3.2"]
 
 [project.optional-dependencies]
 dev = ["pytest", "httpx", "alarm-core", "alarm-sim"]
