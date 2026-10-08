@@ -74,6 +74,25 @@ jobs:
           curl -sf -X POST -H 'content-type: application/json' -d '{"code":"1234"}' localhost:8000/api/arm
       - name: Network segmentation
         run: scripts/sim.sh probe
+      - name: C++ env module raises a safety alarm (edge simulator, gas_leak)
+        run: |
+          ENV_NODE=cpp ENV_SCENARIO=gas_leak NO_MONITORING=1 scripts/sim.sh up
+          for i in $(seq 45); do
+            if curl -sf localhost:8000/api/state | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(not any(a["node"] == "env-1" and a["sensor"] == "gas" for a in d["safety"]))'; then
+              echo "safety alarm from the C++ module after $((i * 2)) s"; exit 0
+            fi
+            sleep 2
+          done
+          docker compose -f infra/docker/compose.yml --profile sim-cpp logs env-1-cpp; exit 1
       - name: Logs on failure
         if: failure()
         run: docker compose -f infra/docker/compose.yml --profile hub --profile sim logs
+
+  cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: C++ protocol against the test vectors
+        run: docker build -f protocol/cpp/Dockerfile.test protocol
+      - name: Edge simulator + alarm-node (builds and runs both test suites)
+        run: docker build -f IA_VISON/edge-simulator/Dockerfile.alarm -t alarm-node .

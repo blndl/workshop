@@ -18,6 +18,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 | (none) | `mosquitto`, `ntfy`, `postgres` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
 | `hub` | + `alarm-core`, `api`, `camera`, `detector`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
 | `sim` | + `door-1`, `env-1` (simulated modules, one container each) | `scripts/sim.sh up` (together with `hub`) |
+| `sim-cpp` | `env-1-cpp`: env-1 from the C++ edge simulator | `ENV_NODE=cpp scripts/sim.sh up` (replaces the Python env-1) |
 | `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `cadvisor` | with `sim.sh up`/`hub` unless `NO_MONITORING=1` ([details](../monitoring/README.md)) |
 | `probe` | `probe` (runs once) | `scripts/sim.sh probe` |
 

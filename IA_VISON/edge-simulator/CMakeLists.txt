@@ -35,6 +35,17 @@ add_executable(sentinel-edge
 )
 target_link_libraries(sentinel-edge PRIVATE edge_core PkgConfig::MOSQUITTO nlohmann_json::nlohmann_json Threads::Threads)
 
+# alarm-node: this simulator as a module of the alarm system, over the encrypted protocol.
+# Needs the C++ protocol library (protocol/cpp in the main repo) and OpenSSL; skipped otherwise.
+set(ALARM_PROTOCOL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../protocol/cpp" CACHE PATH "protocol/cpp")
+if(EXISTS "${ALARM_PROTOCOL_DIR}/CMakeLists.txt")
+  add_subdirectory("${ALARM_PROTOCOL_DIR}" alarm_protocol)
+  add_executable(alarm-node src/alarm_main.cpp src/alarm/AlarmNode.cpp)
+  target_link_libraries(alarm-node PRIVATE edge_core alarm_protocol PkgConfig::MOSQUITTO nlohmann_json::nlohmann_json Threads::Threads)
+else()
+  message(STATUS "alarm-node skipped: no ${ALARM_PROTOCOL_DIR}")
+endif()
+
 include(CTest)
 if(BUILD_TESTING)
   add_executable(edge-tests tests/ScenarioTests.cpp)

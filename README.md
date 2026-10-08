@@ -46,6 +46,7 @@ Open **http://127.0.0.1:8000**.
 | `scripts/sim.sh up` | Core + both simulated modules + monitoring (5 s exit / 10 s entry delay, simulator panel on) |
 | `scripts/sim.sh hub` | Core + monitoring only, for real ESPs (30 s delays, no simulator panel) |
 | `NO_MONITORING=1 scripts/sim.sh up` | Same as `up` without Prometheus/Grafana/Loki (saves about 600 MB of RAM) |
+| `ENV_NODE=cpp ENV_SCENARIO=gas_leak scripts/sim.sh up` | env-1 from the **C++ edge simulator** over the encrypted protocol, playing a scenario (`gas_leak`, `overheat`, `combined_attack`…) |
 | `scripts/sim.sh down` | Stop everything (the event log, photos, database and accounts are kept) |
 | `scripts/sim.sh status` | Show the alarm state |
 | `scripts/sim.sh arm 1234` / `disarm 1234` | Arm or disarm from the terminal |
@@ -112,6 +113,13 @@ For live reload of the dashboard: `cd web && npm run dev`, then open http://loca
 cd web && npm run build                     # includes the TypeScript check
 ```
 
+C++ (in Docker, no local toolchain needed):
+
+```bash
+docker build -f protocol/cpp/Dockerfile.test protocol                          # C++ protocol vs test vectors
+docker build -f IA_VISON/edge-simulator/Dockerfile.alarm -t alarm-node .       # edge simulator + alarm-node
+```
+
 CI runs all of this on every push. It also starts the whole stack in Docker, waits until every module is online, arms through the API, and runs the network segmentation probe.
 
 ## Troubleshooting
@@ -132,7 +140,8 @@ CI runs all of this on every push. It also starts the whole stack in Docker, wai
 | Topic | Where |
 |---|---|
 | Modules: description format, roles, adding one | [docs/modules.md](docs/modules.md) |
-| Protocol between modules and core | [protocol/spec.md](protocol/spec.md) |
+| Protocol between modules and core | [protocol/spec.md](protocol/spec.md) · C++: [protocol/cpp](protocol/cpp/README.md) |
+| C++ edge simulator as env-1 | [IA_VISON/edge-simulator](IA_VISON/edge-simulator/README.md) |
 | Alarm logic, events, tamper-evident log | [services/alarm-core](services/alarm-core/README.md) |
 | Simulator, attacks, scenarios | [simulator](simulator/README.md) |
 | API, event database | [services/api](services/api/README.md) |
@@ -146,7 +155,8 @@ CI runs all of this on every push. It also starts the whole stack in Docker, wai
 | Folder | Contents |
 |---|---|
 | `config/` | `modules.yaml`: the modules plugged into the core |
-| `protocol/` | Module↔core protocol over MQTT: spec, test vectors, Python codec |
+| `protocol/` | Module↔core protocol over MQTT: spec, test vectors, Python and C++ implementations |
+| `IA_VISON/` | Browser vision demo, and the C++ edge simulator (`alarm-node`: env-1 in C++) |
 | `simulator/` | Simulated modules, attacks, scenarios |
 | `services/alarm-core/` | State machine, codes, tamper-evident event log |
 | `services/api/` | FastAPI backend: dashboard API, metrics, event database |
@@ -167,6 +177,6 @@ CI runs all of this on every push. It also starts the whole stack in Docker, wai
 | 0. Stabilise | CI green, PostgreSQL merged, branch protection, integrate the YOLO branch | Mostly done (YOLO integration pending) |
 | 1. Module framework | `modules.yaml`, sensor roles, safety alarms, generic simulator and dashboard | **Done** |
 | 2. Vision | Detector service (YOLOv8n), "motion needs a person" rule, Camera tab, evaluation tool | **Done** (the evaluation dataset is yours to build: `alarm_detector evaluate`) |
-| 3. Environment | Real env module: the C++ simulator / firmware speaking the protocol | Next |
+| 3. Environment | C++ protocol (test-vector exact), the edge simulator as env-1, safety scenarios | **Done** (next: the same code on a real ESP) |
 | 4. Platform | Login + 2FA, live updates, photos in the dashboard, the core on a hardened VM, Tailscale | Started: API, dashboard, Docker, PostgreSQL and monitoring done |
 | 5. Security and report | Threat model per module, pentest, GDPR, demo | To do |
