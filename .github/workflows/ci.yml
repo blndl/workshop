@@ -58,11 +58,15 @@ jobs:
         run: scripts/sim.sh up
       - name: alarm-core sees the node
         run: |
+          # The step runs with bash -e: keep each attempt inside `if` so a
+          # failure (container still starting) retries instead of aborting.
           for i in $(seq 30); do
-            scripts/sim.sh status | grep -q '"online": true' && exit 0
+            if scripts/sim.sh status 2>/dev/null | grep -q '"online": true'; then
+              echo "node online after $((i * 2)) s"; exit 0
+            fi
             sleep 2
           done
-          exit 1
+          echo "node never came online"; exit 1
       - name: Arm through the API
         run: |
           curl -sf -X POST -H 'content-type: application/json' -d '{"code":"1234"}' localhost:8000/api/arm

@@ -17,6 +17,9 @@ x-service: &service
     context: ../..
     dockerfile: infra/docker/Dockerfile
   restart: unless-stopped
+  # Run as the host user who owns .secrets/ and data/ (scripts/sim.sh sets these),
+  # so the mounted files are readable on Linux hosts and CI, not just on macOS.
+  user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
   volumes:
     - ../../.secrets:/app/.secrets:ro
     - ../../data:/app/data
