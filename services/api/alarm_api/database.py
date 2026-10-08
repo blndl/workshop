@@ -25,6 +25,8 @@ from typing import Callable
 import psycopg
 from psycopg.types.json import Jsonb
 
+from .history import read_log  # noqa: F401 (re-exported; used by the backfill)
+
 # Also run on every connection, so databases created before seq existed upgrade themselves.
 SCHEMA = [
     "ALTER TABLE alarm_events ADD COLUMN IF NOT EXISTS seq BIGINT",
@@ -35,8 +37,6 @@ INSERT = """
     VALUES (%s, %s, %s, COALESCE(%s, NOW()), %s)
     ON CONFLICT (seq) DO NOTHING
 """
-# Never stored (see bridge.py): duress must stay invisible, replies aren't events.
-SKIP = {"duress", "status", "control_done"}
 MAX_QUEUE = 10_000  # about a day of normal traffic; beyond that the oldest are dropped
 BATCH = 200
 RETRY_MAX = 30.0
@@ -51,24 +51,6 @@ def _row(event: dict) -> tuple:
             pass
     seq = event.get("seq") if isinstance(event.get("seq"), int) else None
     return (seq, event.get("req"), str(event.get("type", "unknown")), event_time, Jsonb(event))
-
-
-def read_log(path: Path, after_seq: int) -> list[dict]:
-    """Events from alarm-core's log with seq > after_seq (skipping SKIP types)."""
-    events = []
-    try:
-        lines = path.read_text().splitlines()
-    except OSError:
-        return events
-    for line in lines:
-        try:
-            rec = json.loads(line)
-            seq, event = rec["seq"], rec["event"]
-        except (ValueError, KeyError, TypeError):
-            continue  # damaged line: `alarm_core verify-log` reports it
-        if isinstance(seq, int) and seq > after_seq and isinstance(event, dict) and event.get("type") not in SKIP:
-            events.append({**event, "seq": seq})
-    return events
 
 
 class EventStore:

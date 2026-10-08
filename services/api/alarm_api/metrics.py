@@ -58,6 +58,13 @@ class _StateCollector:
                                         value=state["log"].get("seq", 0))
             yield from self._nodes(state.get("nodes") or {})
         yield from self._database()
+        cam = b.camera_status
+        if cam is not None:
+            yield GaugeMetricFamily("alarm_camera_open", "Camera open (1/0)", value=int(bool(cam.get("open"))))
+            yield GaugeMetricFamily("alarm_camera_live_view", "Live view on (1/0)", value=int(bool(cam.get("live"))))
+        det = b.detector_status
+        if det is not None:
+            yield GaugeMetricFamily("alarm_detector_ready", "Detector model loaded (1/0)", value=int(bool(det.get("ready"))))
 
     def _nodes(self, nodes: dict):
         online = GaugeMetricFamily("alarm_node_online", "Module link up (1/0)", labels=["node"])
@@ -110,6 +117,9 @@ class Metrics:
         self.events = Counter("alarm_events", "Events from alarm-core, by type", ["type"], registry=r)
         self.state_changes = Counter("alarm_state_changes", "State changes, by new state", ["state"], registry=r)
         self.security = Counter("alarm_security_events", "Rejected forged/replayed messages", ["node", "kind"], registry=r)
+        self.detections = Counter("alarm_detections", "Snapshots analysed by the detector", ["result"], registry=r)
+        self.detector_latency = Histogram("alarm_detector_latency_seconds", "Detector time per photo", registry=r,
+                                          buckets=(0.05, 0.1, 0.2, 0.3, 0.5, 1, 2, 5))
         self.safety_alarms = Counter("alarm_safety_alarms", "Safety alarms raised", ["node", "sensor"], registry=r)
         self.sensor_changes = Counter("alarm_sensor_changes", "Sensor changes", ["node", "sensor", "value"], registry=r)
         self.http = Histogram("alarm_api_request_duration_seconds", "API request duration",
@@ -126,6 +136,9 @@ class Metrics:
             self.state_changes.labels(_label(e.get("state"))).inc()
         elif t == "security":
             self.security.labels(_label(e.get("node")), _label(e.get("kind"))).inc()
+        elif t == "detection":
+            self.detections.labels("person" if e.get("person") else "no_person").inc()
+            self.detector_latency.observe(float(e.get("latency_ms") or 0) / 1000)
         elif t == "safety_alarm":
             self.safety_alarms.labels(_label(e.get("node")), _label(e.get("sensor"))).inc()
         elif t == "sensor":

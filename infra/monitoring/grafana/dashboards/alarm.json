@@ -1046,12 +1046,214 @@
     },
     {
       "type": "row",
+      "title": "Vision",
+      "collapsed": false,
+      "panels": [],
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 1
+      },
+      "id": 31
+    },
+    {
+      "type": "timeseries",
+      "title": "Photos analysed per minute",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "expr": "sum by (result) (increase(alarm_detections_total[1m]))",
+          "legendFormat": "{{result}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "id": 32
+    },
+    {
+      "type": "timeseries",
+      "title": "Motion checks",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 31,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "legendFormat": "{{type}}",
+          "expr": "sum by (type) (increase(alarm_events_total{type=~\"motion_confirmed|motion_dismissed|verify_timeout\"}[5m]))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "motion_dismissed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "dismissed (false alarm avoided)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "motion_confirmed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "confirmed (person seen)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "verify_timeout"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "not verified in time"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "interval": "1m",
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "id": 33
+    },
+    {
+      "type": "timeseries",
+      "title": "Detector time per photo (median)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 31,
+        "w": 8,
+        "h": 7
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "A",
+          "legendFormat": "median",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(alarm_detector_latency_seconds_bucket[10m])))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "id": 34
+    },
+    {
+      "type": "row",
       "title": "Platform",
       "id": 15,
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 38,
         "w": 24,
         "h": 1
       },
@@ -1067,7 +1269,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 39,
         "w": 8,
         "h": 7
       },
@@ -1112,7 +1314,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 31,
+        "y": 39,
         "w": 8,
         "h": 7
       },
@@ -1158,7 +1360,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 31,
+        "y": 39,
         "w": 8,
         "h": 7
       },
@@ -1230,7 +1432,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 46,
         "w": 8,
         "h": 7
       },
@@ -1276,7 +1478,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 38,
+        "y": 46,
         "w": 8,
         "h": 7
       },
@@ -1322,7 +1524,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 38,
+        "y": 46,
         "w": 8,
         "h": 7
       },
@@ -1400,7 +1602,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 45,
+        "y": 53,
         "w": 24,
         "h": 1
       },
@@ -1416,7 +1618,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 46,
+        "y": 54,
         "w": 9,
         "h": 8
       },
@@ -1469,7 +1671,7 @@
       },
       "gridPos": {
         "x": 9,
-        "y": 46,
+        "y": 54,
         "w": 6,
         "h": 8
       },
@@ -1497,7 +1699,7 @@
       },
       "gridPos": {
         "x": 15,
-        "y": 46,
+        "y": 54,
         "w": 9,
         "h": 8
       },
@@ -1525,7 +1727,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 54,
+        "y": 62,
         "w": 24,
         "h": 8
       },
@@ -1550,7 +1752,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 62,
+        "y": 70,
         "w": 24,
         "h": 1
       },
@@ -1566,7 +1768,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 63,
+        "y": 71,
         "w": 24,
         "h": 12
       },

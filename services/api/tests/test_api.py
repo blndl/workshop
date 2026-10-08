@@ -1,5 +1,6 @@
 """The API against the real alarm-core and a simulated node, on the in-memory bus."""
 
+import json
 import threading
 import time
 
@@ -212,3 +213,55 @@ def test_access_log_quiets_polling():
     assert not f.filter(record("GET", "/api/events?limit=500", 200))
     assert f.filter(record("POST", "/api/arm", 200))        # changes are kept
     assert f.filter(record("GET", "/api/state", 503))       # errors are kept
+
+
+def test_camera_gallery_hides_duress_and_checks_integrity(tmp_path):
+    import hashlib
+
+    bus = MemoryBus()
+    snaps = tmp_path / "snaps"
+    (snaps / "day").mkdir(parents=True)
+    files = {"day/a_pir.jpg": b"\xff\xd8 one", "day/b_duress-1.jpg": b"\xff\xd8 two", "day/c_alarm.jpg": b"\xff\xd8 three"}
+    for name, data in files.items():
+        (snaps / name).write_bytes(data)
+    sha = {n: hashlib.sha256(d).hexdigest() for n, d in files.items()}
+    sha["day/c_alarm.jpg"] = "0" * 64  # tampered: logged hash doesn't match
+    with TestClient(create_app(Bridge(bus.client()), snapshots_dir=snaps)) as client:
+        pub = bus.client()
+        for name, reason in (("day/a_pir.jpg", "pir"), ("day/b_duress-1.jpg", "duress-1"), ("day/c_alarm.jpg", "alarm-door-1")):
+            pub.publish("alarm/events", json.dumps({"type": "snapshot", "ts": 1, "path": name, "reason": reason, "sha256": sha[name]}))
+        pub.publish("alarm/events", json.dumps({"type": "detection", "path": "day/a_pir.jpg", "reason": "pir", "person": True,
+                                                "confidence": 0.9, "objects": {"person": 1}, "boxes": [], "latency_ms": 10}))
+        pub.publish("alarm/events", json.dumps({"type": "detection", "path": "day/b_duress-1.jpg", "reason": "duress-1", "person": True}))
+        gallery = client.get("/api/camera/snapshots").json()
+        assert [g["path"] for g in gallery] == ["day/c_alarm.jpg", "day/a_pir.jpg"]  # newest first, duress gone
+        assert gallery[0]["verified"] is False and gallery[1]["verified"] is True
+        assert gallery[1]["detection"]["person"] is True
+        assert client.get("/api/camera/snapshots/file/day/a_pir.jpg").content == files["day/a_pir.jpg"]
+        assert client.get("/api/camera/snapshots/file/day/b_duress-1.jpg").status_code == 404
+        assert client.get("/api/camera/snapshots/file/..%2F..%2Fetc%2Fpasswd").status_code == 404
+        assert all("duress" not in json.dumps(e) for e in client.get("/api/events?limit=500").json())
+
+
+def test_camera_live_view_and_frames(api):
+    client, house = api
+    assert client.get("/api/camera/frame.jpg").status_code == 404  # camera off
+    r = client.post("/api/camera/live", json={"on": True})
+    assert r.json() == {"on": True, "seconds": 30.0} or r.json()["on"] is True
+    assert wait_for(lambda: client.get("/api/state").json().get("live_view_s", 0) > 0)
+    bus_pub = house.core.transport  # publish a frame as the camera would
+    bus_pub.publish("alarm/camera/frame", b"\xff\xd8 live")
+    assert client.get("/api/camera/frame.jpg").content == b"\xff\xd8 live"
+    assert client.get("/api/camera").json()["streaming"] is True
+    assert client.post("/api/camera/live", json={"on": False}).json()["on"] is False
+
+
+def test_restarted_api_refills_its_events_from_the_log(tmp_path):
+    log = tmp_path / "events.jsonl"
+    rows = [{"type": "snapshot", "path": "d/a.jpg", "reason": "pir"}, {"type": "duress", "action": "disarm"},
+            {"type": "snapshot", "path": "d/b_duress-1.jpg", "reason": "duress-1"}, {"type": "state", "state": "armed"}]
+    log.write_text("".join(json.dumps({"seq": i, "event": e}) + "\n" for i, e in enumerate(rows, 1)))
+    with TestClient(create_app(Bridge(MemoryBus().client(), history_from=log))) as client:
+        events = client.get("/api/events").json()
+        assert [e["type"] for e in events] == ["state", "snapshot"]  # newest first, duress and its photo left out
+        assert events[1]["seq"] == 1

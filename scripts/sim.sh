@@ -20,7 +20,8 @@ export HOST_UID=$(id -u) HOST_GID=$(id -g)
 
 need_secrets() {
   [[ -f .secrets/dev.json ]] || { echo "no secrets yet: run scripts/dev-secrets.sh first" >&2; exit 1; }
-  mkdir -p data
+  mkdir -p data models
+  [[ -s models/yolov8n.onnx ]] || scripts/get-model.sh || echo "warning: no detector model (scripts/get-model.sh); motion will count without a person check" >&2
 }
 core() { "${COMPOSE[@]}" exec -T alarm-core python -m alarm_core --broker mosquitto:1883 "$@"; }
 

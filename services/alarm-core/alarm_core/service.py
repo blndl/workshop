@@ -26,6 +26,7 @@ CONTROL_TOPIC = "alarm/control"
 EVENTS_TOPIC = "alarm/events"
 STATE_TOPIC = "alarm/state"
 SNAPSHOTS_TOPIC = "alarm/snapshots"
+DETECTIONS_TOPIC = "alarm/detections"
 KEEPALIVE_INTERVAL = 5.0
 STATE_INTERVAL = 1.0  # alarm/state is also republished this often, for live metrics
 MAX_CONTROL_BYTES = 512
@@ -58,7 +59,7 @@ class AlarmService:
         self._sent_outputs: dict[str, dict[str, str]] = {}
         self._cmd_id = 0
         self._next_state = 0.0
-        for pattern in ("alarm/v1/+/up", "alarm/v1/+/status", CONTROL_TOPIC, SNAPSHOTS_TOPIC):
+        for pattern in ("alarm/v1/+/up", "alarm/v1/+/status", CONTROL_TOPIC, SNAPSHOTS_TOPIC, DETECTIONS_TOPIC):
             transport.subscribe(pattern, lambda t, p: self._inbox.put((t, p)))
 
     def start(self) -> None:
@@ -74,6 +75,8 @@ class AlarmService:
                 self._control(payload, now)
             elif topic == SNAPSHOTS_TOPIC:
                 self._snapshot(payload)
+            elif topic == DETECTIONS_TOPIC:
+                self._detection(payload, now)
             else:
                 self._from_node(topic, payload, now)
 
@@ -157,6 +160,8 @@ class AlarmService:
                 self.machine.disarm(code, now, source)
             elif action == "status":
                 self.machine.status(now)
+            elif action == "live_view":
+                self.machine.live_view(bool(req.get("on")), now, source)
             else:
                 self.log(f"[alarm] unknown control action {action!r}")
             # Every request ends with this, so callers know it was handled
@@ -181,6 +186,29 @@ class AlarmService:
             self.log(f"[alarm] bad snapshot message: {e}")
             return
         self._own_events.append({"type": "snapshot", "path": path, "sha256": digest, "reason": str(reason)[:40]})
+
+    def _detection(self, payload: bytes, now: float) -> None:
+        """A detector result: logged (so the log covers what the AI saw) and fed to the machine."""
+        try:
+            msg = json.loads(payload)
+            path, reason = msg["path"], str(msg.get("reason", ""))[:40]
+            if not (isinstance(path, str) and len(path) <= 200 and ".." not in path):
+                raise ValueError("bad path")
+            boxes = msg.get("boxes") or []
+            if not isinstance(boxes, list) or len(boxes) > 50:
+                raise ValueError("bad boxes")
+            result = {
+                "path": path, "reason": reason, "person": bool(msg.get("person")),
+                "confidence": float(msg.get("confidence") or 0),
+                "objects": {str(k)[:24]: int(v) for k, v in (msg.get("objects") or {}).items()},
+                "boxes": [{k: b[k] for k in ("label", "confidence", "x", "y", "w", "h")} for b in boxes],
+                "latency_ms": float(msg.get("latency_ms") or 0),
+            }
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
+            self.log(f"[alarm] bad detection message: {e}")
+            return
+        self._own_events.append({"type": "detection", **result})
+        self.machine.detection(result, now)
 
     # --- publishing -------------------------------------------------------
 

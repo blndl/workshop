@@ -87,3 +87,45 @@ export type SimCommand =
   | { cmd: "jam"; seconds: number }
   | { cmd: "reboot"; seconds?: number }
   | { cmd: "attack"; name: string; args?: Record<string, number | string> };
+
+export interface DetectionBox {
+  label: string;
+  confidence: number;
+  x: number; // 0-1, from the left
+  y: number; // 0-1, from the top
+  w: number;
+  h: number;
+}
+
+export interface Snapshot {
+  path: string;
+  ts: number;
+  reason: string;
+  seq?: number;
+  url: string;
+  verified: boolean | null; // file matches the sha256 in the tamper-evident log
+  detection: {
+    person: boolean;
+    confidence: number;
+    objects: Record<string, number>;
+    boxes: DetectionBox[];
+    latency_ms: number;
+  } | null;
+}
+
+export interface CameraInfo {
+  camera: { open: boolean; why: string; source: string; live: boolean; error: boolean; frames: number; snapshots: number } | null;
+  streaming: boolean;
+  detector: { ready: boolean; model: string; error: string | null; processed: number; persons: number; last_latency_ms: number | null } | null;
+  live_view_s: number;
+  verifying: { node: string; sensor: string } | null;
+  stats: {
+    photos: number;
+    analysed: number;
+    with_person: number;
+    motion_confirmed: number;
+    motion_dismissed: number;
+    verify_timeouts: number;
+    median_latency_ms: number | null;
+  };
+}

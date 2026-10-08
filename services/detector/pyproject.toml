@@ -1,0 +1,22 @@
+[project]
+name = "alarm-detector"
+version = "0.1.0"
+description = "Person detection (YOLOv8n, ONNX Runtime) on the alarm's snapshots"
+requires-python = ">=3.11"
+dependencies = ["alarm-protocol[mqtt]", "onnxruntime>=1.17", "numpy", "opencv-python-headless>=4.8"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+alarm-detector = "alarm_detector.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["alarm_detector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

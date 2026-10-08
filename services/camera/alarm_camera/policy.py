@@ -1,7 +1,8 @@
 """When to take pictures. Pure logic, driven by alarm-core events.
 
 Privacy rule: the camera is only open while the system is arming, armed,
-in its entry delay or triggered. While disarmed, nothing is captured.
+in its entry delay or triggered. While disarmed, nothing is captured, unless
+someone starts a live view (logged by alarm-core, ends by itself).
 """
 
 from __future__ import annotations
@@ -21,10 +22,26 @@ class CapturePolicy:
         self.pending: list[tuple[float, str]] = []  # (due time, reason), sorted
         self._periodic_until: float | None = None
         self._next_periodic = 0.0
+        self.live_until: float | None = None  # live view requested (monotonic deadline)
+
+    @property
+    def live(self) -> bool:
+        return self.live_until is not None
 
     @property
     def camera_wanted(self) -> bool:
-        return self.state in ACTIVE_STATES or bool(self.pending)
+        return self.state in ACTIVE_STATES or bool(self.pending) or self.live
+
+    @property
+    def why(self) -> str:
+        """Why the camera is on (or off), for the dashboard."""
+        if self.state in ACTIVE_STATES:
+            return f"system {self.state.replace('_', ' ')}"
+        if self.live:
+            return "live view"
+        if self.pending:
+            return "finishing photos"
+        return "off while disarmed (privacy)"
 
     def on_event(self, e: dict, now: float) -> None:
         t = e.get("type")
@@ -43,6 +60,10 @@ class CapturePolicy:
             self._add(now, f"{e.get('sensor', 'sensor')}")
         elif t == "duress":
             self._burst(now, "duress")  # silently, before the disarm closes the camera
+        elif t == "verify":
+            self._burst(now, "verify", force=True)  # alarm-core waits for the detector on these
+        elif t == "live_view":
+            self.live_until = now + float(e.get("seconds") or 120) if e.get("on") else None
 
     def on_state_snapshot(self, snap: dict) -> None:
         """Initial state from the retained alarm/state message."""
@@ -50,6 +71,8 @@ class CapturePolicy:
 
     def due(self, now: float) -> list[str]:
         """Reasons for captures due now (removes them from pending)."""
+        if self.live_until is not None and now >= self.live_until:
+            self.live_until = None
         if self._periodic_until is not None:
             if now >= self._periodic_until:
                 self._periodic_until = None
@@ -60,9 +83,9 @@ class CapturePolicy:
         self.pending = [(t, r) for t, r in self.pending if t > now]
         return reasons
 
-    def _burst(self, now: float, reason: str) -> None:
+    def _burst(self, now: float, reason: str, force: bool = True) -> None:
         for i, dt in enumerate(BURST):
-            self._add(now + dt, f"{reason}-{i + 1}", force=True)
+            self._add(now + dt, f"{reason}-{i + 1}", force=force)
 
     def _add(self, at: float, reason: str, force: bool = False) -> None:
         if not force and any(abs(t - at) < MIN_GAP for t, _ in self.pending):

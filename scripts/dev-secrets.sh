@@ -38,7 +38,7 @@ def code_hash(code):
     return f"pbkdf2_sha256$200000${salt.hex()}${h.hex()}"
 
 d.setdefault("broker", {"host": "127.0.0.1", "port": 1883})
-for account in ("hub", "ctl", "api", "camera", "notifier", "attacker"):
+for account in ("hub", "ctl", "api", "camera", "detector", "notifier", "attacker"):
     d.setdefault(account, {"password": pw()})
 nodes = d.setdefault("nodes", {})
 for n in sys.argv[1:]:
@@ -51,7 +51,7 @@ d.setdefault("codes", {"user": [code_hash("1234")], "duress": [code_hash("9999")
 path.write_text(json.dumps(d, indent=2) + "\n")
 path.chmod(0o600)
 
-users = {a: d[a]["password"] for a in ("hub", "ctl", "api", "camera", "notifier", "attacker")}
+users = {a: d[a]["password"] for a in ("hub", "ctl", "api", "camera", "detector", "notifier", "attacker")}
 users |= {n: v["password"] for n, v in nodes.items()}
 Path(".secrets/mosquitto/passwd").write_text("".join(f"{u}:{p}\n" for u, p in users.items()))
 print("accounts:", ", ".join(users))

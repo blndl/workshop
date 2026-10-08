@@ -56,3 +56,12 @@ def test_invalid_module(data):
 
 def test_default_door_matches_the_original():
     assert {n: s.role for n, s in DEFAULT_DOOR.sensors.items()} == {"door": "entry", "pir": "entry", "lid": "tamper"}
+
+
+def test_confirm_person_only_on_entry_and_instant():
+    ok = parse(mod(pir={"kind": "motion", "role": "entry", "confirm": "person"})).modules["m-1"].sensors["pir"]
+    assert ok.confirm == "person" and ok.info()["confirm"] == "person"
+    with pytest.raises(ModuleError, match="confirm"):
+        parse(mod(lid={"kind": "tamper", "role": "tamper", "confirm": "person"}))
+    with pytest.raises(ModuleError, match="confirm"):
+        parse(mod(pir={"kind": "motion", "role": "entry", "confirm": "cat"}))

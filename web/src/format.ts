@@ -65,6 +65,20 @@ export function describe(e: AlarmEvent): { text: string; severity: Severity } {
       return { text: `Camera error: ${e.error}`, severity: "danger" };
     case "log_tampered":
       return { text: `Event log tampered (${e.count} problems)`, severity: "danger" };
+    case "verify":
+      return { text: `Motion on ${e.node}: checking the camera…`, severity: "info" };
+    case "motion_confirmed":
+      return { text: `Person seen by the camera (${Math.round(Number(e.confidence) * 100)}%)${node}`, severity: "danger" };
+    case "motion_dismissed": {
+      const seen = Object.keys((e.seen as Record<string, number>) ?? {}).join(", ");
+      return { text: `Motion dismissed: no person${seen ? ` (saw: ${seen})` : ""}${node}`, severity: "ok" };
+    }
+    case "verify_timeout":
+      return { text: `Motion not verified in time: counted anyway${node}`, severity: "warn" };
+    case "detection":
+      return { text: `Detector: ${e.person ? "person" : "no person"} on ${e.reason}`, severity: "info" };
+    case "live_view":
+      return { text: e.on ? `Live view started (${e.source})` : `Live view stopped (${e.source})`, severity: "warn" };
     case "siren_timeout":
       return { text: `Siren stopped after ${e.seconds}s`, severity: "info" };
     default:

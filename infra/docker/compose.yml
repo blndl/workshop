@@ -105,6 +105,16 @@ services:
     # devices: ["/dev/video0:/dev/video0"]
     networks: [core]
 
+  detector:   # person detection on each snapshot (YOLOv8n); model from scripts/get-model.sh
+    <<: *service
+    profiles: [hub]
+    command: [python, -m, alarm_detector, run, --broker, "mosquitto:1883"]
+    volumes:
+      - ../../.secrets:/app/.secrets:ro
+      - ../../data:/app/data:ro           # reads the snapshots, writes nothing
+      - ../../models:/app/models:ro
+    networks: [core]
+
   notifier:
     <<: *service
     profiles: [hub]

@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install
-        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]' -e 'services/api[dev]'
+        run: pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' -e 'services/camera[dev]' -e 'services/notifier[dev]' -e 'services/api[dev]' -e 'services/detector[dev]'
       - name: Protocol tests
         run: pytest -q protocol/python
       - name: Test vectors are up to date
@@ -32,6 +32,8 @@ jobs:
         run: pytest -q services/notifier
       - name: api tests
         run: pytest -q services/api
+      - name: detector tests
+        run: pytest -q services/detector   # the real-model test is skipped without models/
 
   web:
     runs-on: ubuntu-latest

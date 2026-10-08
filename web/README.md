@@ -16,6 +16,7 @@ src/
     Metrics            counts of alarms, attacks, link losses, wrong codes, photos
     Timeline           recent events, coloured by severity
     SimPanel           DEV ONLY: drive the simulated modules (any sensor), see their LED and buzzer
+    CameraTab          the Camera tab: live feed, live view, vision stats, health, photos with detection boxes
     MetricsTab         the Metrics tab: Grafana embedded (needs the monitoring profile)
 ```
 
