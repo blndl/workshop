@@ -76,7 +76,7 @@ services:
   api:
     <<: *service
     profiles: [hub]
-    command: [python, -m, alarm_api, --broker, "mosquitto:1883", --host, 0.0.0.0]
+    command: [python, -m, alarm_api, --broker, "mosquitto:1883", --host, 0.0.0.0, --sim]
     environment:
       ALARM_SIM: ${ALARM_SIM:-0} 
       DATABASE_URL: postgresql://${POSTGRES_USER:-alarm}:${POSTGRES_PASSWORD:-alarm-dev-password}@postgres:5432/${POSTGRES_DB:-alarm}  # 1 = show the simulator panel (dev only)
