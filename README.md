@@ -1,26 +1,54 @@
 # workshop
 
-A modular home security system that is itself hard to attack, and uses AI to cut false alarms.
+**A modular, self-hosted security platform** that protects a site against intrusion and environmental hazards, cuts false alarms with on-site AI, and is built to resist attacks on itself.
 
-**Modules** (ESP8266 boards, or simulated ones) talk over Wi-Fi to **the core**: a set of Docker services that runs on any Linux machine (a laptop, a VM, an old PC, a Raspberry Pi). Each module is described in [`config/modules.yaml`](config/modules.yaml), and the core treats its sensors by **role**, so a new kind of module needs a description, not code ([docs/modules.md](docs/modules.md)).
+It's for any site that needs alarm monitoring without handing its data to a cloud provider: **offices, shops, small business premises, warehouses, technical and server rooms, labs, and homes**. One core supervises any number of field modules (door and motion, gas and temperature, more by configuration), with one dashboard, one audit trail and one alerting channel.
 
-Two modules come with it, both simulated:
+## Why it's different
+
+| | |
+|---|---|
+| **Secure by design** | Every message between a module and the core is encrypted and authenticated (ChaCha20-Poly1305) with replay protection. Jamming, cut cables and a smashed module trigger the alarm (fail-secure). Network segmentation means a compromised device on the site network can reach the message broker and nothing else. |
+| **Fewer false alarms** | On-site person detection (YOLOv8n) verifies motion before it counts: a cat, a curtain or a light change is dismissed. False alarms waste staff time and, where a monitoring company or guard is called out, cost money. The platform counts how many it avoided. |
+| **Intrusion and safety in one** | Intrusion alarms (entry delay, instant zones, tamper) run alongside safety alarms (gas, overheating…) that sound whether or not the system is armed. |
+| **Evidence you can trust** | Every event and every photo is recorded in a tamper-evident, hash-chained log. Edited or deleted records and modified photos are detected, which matters when footage is used after an incident. |
+| **Modular** | A new kind of module is a description in [`config/modules.yaml`](config/modules.yaml), not new code: the core treats each sensor by its role ([docs/modules.md](docs/modules.md)). |
+| **Privacy by design** | Cameras are off while disarmed. Viewing them is time-limited and logged, photos are deleted after 30 days, and nothing leaves the site unless you choose to. That's a strong base for GDPR compliance. |
+| **Self-hosted and observable** | Runs as Docker containers on any Linux machine (a small server, a VM, a mini PC, a Raspberry Pi). Metrics, logs and history in Grafana; alerts to phones through a self-hosted ntfy server. |
+
+## Architecture
+
+**Modules** (ESP8266 boards, or simulated ones) talk over the site's Wi-Fi to **the core**, a set of Docker services:
+
+```
+ site network (iot)                             the core (Docker)
+ ┌──────────────┐  encrypted MQTT   ┌──────────────────────────────────────────────────────┐
+ │ door-1       │◀────────────────▶ │ Mosquitto ── alarm-core (state machine, audit log)    │
+ │ env-1        │   protocol v1     │                │                                     │
+ │ (more…)      │                   │   api + dashboard · camera · detector · notifier      │
+ └──────────────┘                   │   PostgreSQL · monitoring: Prometheus, Loki, Grafana │
+                                    └──────────────────────────────────────────────────────┘
+                                         browser :8000      phones (ntfy) :8080
+```
+
+Two example modules come with it, both simulated:
 
 | Module | Sensors | What it shows |
 |---|---|---|
-| **door-1**, front door | door (entry), motion (entry), lid (tamper) | Intrusion: entry delay, alarm, siren |
-| **env-1**, kitchen | gas and temperature (safety), humidity (telemetry), lid (tamper) | Safety alarms that sound whether or not the system is armed |
+| **door-1**, entrance | door (entry), motion (entry, verified by the camera), lid (tamper) | Intrusion: entry delay, AI verification, alarm, siren |
+| **env-1**, technical room / kitchen | gas and temperature (safety), humidity (telemetry), lid (tamper) | Safety alarms whether or not the system is armed |
 
-```
- house Wi-Fi (iot)                              the core (Docker)
- ┌──────────────┐  encrypted MQTT   ┌──────────────────────────────────────────────────────┐
- │ door-1       │◀────────────────▶ │ Mosquitto ── alarm-core (state machine, log)          │
- │ env-1        │   protocol v1     │                │                                     │
- │ (more…)      │                   │   api + dashboard ── camera ── notifier ── PostgreSQL │
- └──────────────┘                   │   monitoring: Prometheus, Loki, Grafana              │
-                                    └──────────────────────────────────────────────────────┘
-                                         browser :8000      phone (ntfy) :8080
-```
+## Project status
+
+This is a **working prototype**, developed as an EPSI M1 project. The core, the protocol, the AI verification, the dashboard and the monitoring all run, are tested (190 Python tests, C++ test vectors, an end-to-end CI run of the whole stack) and can be demonstrated. The field modules are **simulated** (Python, and the C++ edge simulator).
+
+Not there yet, and needed before a real deployment:
+- **User login with 2FA and roles.** The dashboard currently listens on localhost only.
+- **A hardened host and secure remote access:** OS hardening, firewall, Tailscale.
+- **Firmware on real hardware.** The C++ protocol is ready for it.
+- **A formal threat model, a pentest and a GDPR review.**
+
+The platform makes **no claim of compliance with alarm standards** (EN 50131, NF&A2P) and has **no certification**. See [Status](#status) for the roadmap.
 
 ## Quick start: everything in Docker
 
@@ -51,7 +79,7 @@ Open **http://127.0.0.1:8000**.
 | `scripts/sim.sh status` | Show the alarm state |
 | `scripts/sim.sh arm 1234` / `disarm 1234` | Arm or disarm from the terminal |
 | `scripts/sim.sh verify` | Check that the event log and photos haven't been tampered with |
-| `scripts/sim.sh probe` | Check that a device on the house Wi-Fi can only reach the broker |
+| `scripts/sim.sh probe` | Check that a device on the site network can only reach the broker |
 | `scripts/sim.sh logs [service]` | Follow the logs: all, or one service (`alarm-core`, `api`, `door-1`, `env-1`, `notifier`…) |
 | `scripts/sim.sh ps` | List the running containers |
 
@@ -63,7 +91,7 @@ Open **http://127.0.0.1:8000**.
 | Grafana | http://127.0.0.1:3000, also in the dashboard's Metrics tab | viewing: none · admin: password in `.secrets/dev.json` → `grafana` |
 | Alerts (ntfy) | http://localhost:8080, or the ntfy phone app | `phone` / password in `.secrets/dev.json` → `ntfy` |
 | MQTT broker | 127.0.0.1:1883 (`MQTT_BIND=0.0.0.0` for real ESPs on the network) | one account per module and service |
-| Alarm codes | dev only | **`1234`** user code · **`9999`** duress code (disarms normally, silently alerts) |
+| Alarm codes | dev only | **`1234`** user code · **`9999`** duress code (disarms normally, silently alerts: for a staff member or resident forced to disarm) |
 
 Everything secret lives in `.secrets/` (keys, passwords, codes), created by `scripts/dev-secrets.sh` and never committed. Ports, settings, real ESPs and the webcam on Linux: [infra/docker/README.md](infra/docker/README.md).
 
