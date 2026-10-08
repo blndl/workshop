@@ -1,0 +1,96 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/broker/version", "-C", "1", "-W", "3"]
+      interval: 5s
+      timeout: 4s
+      retries: 10
+
+  edge-simulator:
+    build: .
+    environment:
+      ROLE: coordinator
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-ESP8266-001}
+      MQTT_DEVICE_ID: ${MQTT_CLIENT_ID:-ESP8266-001}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TLS: ${MQTT_TLS:-false}
+      MQTT_CA_CERT: ${MQTT_CA_CERT:-}
+      SENSOR_INTERVAL_MS: ${SENSOR_INTERVAL_MS:-1000}
+      SCENARIO: ${SCENARIO:-normal}
+      ALERT_GAS_THRESHOLD: ${ALERT_GAS_THRESHOLD:-0.50}
+      ALERT_TEMPERATURE_THRESHOLD: ${ALERT_TEMPERATURE_THRESHOLD:-35}
+      ALERT_HUMIDITY_MIN: ${ALERT_HUMIDITY_MIN:-40}
+      ALERT_HUMIDITY_MAX: ${ALERT_HUMIDITY_MAX:-60}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sensor-dht22:
+    build: .
+    environment:
+      ROLE: sensor
+      SENSOR_KIND: dht22
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-ESP8266-001}-dht22
+      MQTT_DEVICE_ID: ${MQTT_CLIENT_ID:-ESP8266-001}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TLS: ${MQTT_TLS:-false}
+      MQTT_CA_CERT: ${MQTT_CA_CERT:-}
+      SENSOR_INTERVAL_MS: ${SENSOR_INTERVAL_MS:-1000}
+      SCENARIO: ${SCENARIO:-normal}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sensor-mq2:
+    build: .
+    environment:
+      ROLE: sensor
+      SENSOR_KIND: mq2
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-ESP8266-001}-mq2
+      MQTT_DEVICE_ID: ${MQTT_CLIENT_ID:-ESP8266-001}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TLS: ${MQTT_TLS:-false}
+      MQTT_CA_CERT: ${MQTT_CA_CERT:-}
+      SENSOR_INTERVAL_MS: ${SENSOR_INTERVAL_MS:-1000}
+      SCENARIO: ${SCENARIO:-normal}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+  sensor-pir:
+    build: .
+    environment:
+      ROLE: sensor
+      SENSOR_KIND: pir
+      MQTT_HOST: ${MQTT_HOST:-mosquitto}
+      MQTT_PORT: ${MQTT_PORT:-1883}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-ESP8266-001}-pir
+      MQTT_DEVICE_ID: ${MQTT_CLIENT_ID:-ESP8266-001}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TLS: ${MQTT_TLS:-false}
+      MQTT_CA_CERT: ${MQTT_CA_CERT:-}
+      SENSOR_INTERVAL_MS: ${SENSOR_INTERVAL_MS:-1000}
+      SCENARIO: ${SCENARIO:-normal}
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
