@@ -15,7 +15,7 @@ A sensor node (ESP8266, or the simulator) talks over Wi-Fi to "the box": a set o
 | `services/detector/` | Person detection (to do) |
 | `web/` | React dashboard |
 | `firmware/` | ESP8266 firmware (to do) |
-| `infra/` | Docker image and Compose stack; Ansible, monitoring, VPN later |
+| `infra/` | Docker image and Compose stack, monitoring (Prometheus, Grafana, Loki); Ansible and VPN later |
 | `scripts/` | Secrets generation, ntfy setup, `sim.sh` |
 | `cloud/`, `security/`, `hardware/`, `docs/` | Off-site parts, threat model and pentest, wiring, report |
 
@@ -31,9 +31,11 @@ scripts/sim.sh up             # builds the image, starts the box + a simulated E
 
 Open **http://127.0.0.1:8000**. Arm with `1234`, then click **Open door** in the simulator panel at the bottom: after the 10 s entry delay the alarm triggers, the simulated ESP's buzzer turns on, and an alert with a photo arrives at http://localhost:8080.
 
+The **Metrics** tab shows Grafana: signal and link per module, attacks, events, the database, every container's CPU and memory, the history, and all the logs ([infra/monitoring](infra/monitoring/README.md)). It starts with the stack; `NO_MONITORING=1 scripts/sim.sh up` skips it and saves about 600 MB of RAM.
+
 | Command | What it does |
 |---|---|
-| `scripts/sim.sh up` | Start the box + simulated ESP (5 s exit / 10 s entry delay, simulator panel on) |
+| `scripts/sim.sh up` | Start the box + simulated ESP + monitoring (5 s exit / 10 s entry delay, simulator panel on) |
 | `scripts/sim.sh hub` | Start the box only, for a real ESP (30 s delays, no simulator panel) |
 | `scripts/sim.sh down` | Stop everything (the event log, photos and alert accounts are kept) |
 | `scripts/sim.sh status` | Show the alarm state |
@@ -80,7 +82,7 @@ cd web && npm run build       # includes the TypeScript check
 
 CI runs all of this on every push.
 
-Details: [protocol](protocol/spec.md) · [simulator](simulator/README.md) · [alarm-core](services/alarm-core/README.md) · [api](services/api/README.md) · [camera](services/camera/README.md) · [notifier](services/notifier/README.md) · [dashboard](web/README.md) · [docker](infra/docker/README.md)
+Details: [protocol](protocol/spec.md) · [simulator](simulator/README.md) · [alarm-core](services/alarm-core/README.md) · [api](services/api/README.md) · [camera](services/camera/README.md) · [notifier](services/notifier/README.md) · [dashboard](web/README.md) · [docker](infra/docker/README.md) · [monitoring](infra/monitoring/README.md)
 
 ## Phases
 

@@ -174,3 +174,40 @@ def test_sim_panel_drives_the_node():
         assert all(client.post("/api/sim/door-1/command", json=b).status_code == 422 for b in bad)
         assert client.post("/api/sim/..%2Fetc/command", json={"cmd": "jam", "seconds": 3}).status_code in (404, 422)
     house.stop()
+
+
+def test_prometheus_metrics(api):
+    client, house = api
+    client.post("/api/arm", json={"code": "1234"})
+    wait_for(lambda: house.machine.state == "armed")
+    client.post("/api/disarm", json={"code": "9999"})  # duress
+    wait_for(lambda: house.machine.state == "disarmed")
+    assert wait_for(lambda: 'alarm_state_changes_total{state="disarmed"}' in client.get("/metrics").text)
+    text = client.get("/metrics").text
+    assert 'alarm_state{state="disarmed"} 1.0' in text
+    assert 'alarm_node_online{node="door-1"} 1.0' in text
+    assert 'alarm_node_rssi_dbm{node="door-1"}' in text
+    assert 'alarm_state_changes_total{state="armed"} 1.0' in text
+    assert 'alarm_api_request_duration_seconds_count{method="POST",route="/api/arm",status="200"}' in text
+    assert "duress" not in text  # a forced disarm must not show anywhere
+
+
+def test_info_without_grafana(api):
+    client, _ = api
+    assert client.get("/api/info").json() == {"grafana_url": None}
+
+
+def test_access_log_quiets_polling():
+    import logging
+
+    from alarm_api.__main__ import _QuietPolling
+
+    def record(method, path, status):
+        return logging.LogRecord("uvicorn.access", logging.INFO, "", 0, '%s - "%s %s HTTP/%s" %d',
+                                 ("1.2.3.4:5", method, path, "1.1", status), None)
+
+    f = _QuietPolling()
+    assert not f.filter(record("GET", "/metrics", 200))
+    assert not f.filter(record("GET", "/api/events?limit=500", 200))
+    assert f.filter(record("POST", "/api/arm", 200))        # changes are kept
+    assert f.filter(record("GET", "/api/state", 503))       # errors are kept

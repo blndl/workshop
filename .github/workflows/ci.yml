@@ -55,7 +55,7 @@ jobs:
       - name: Secrets for the test stack
         run: scripts/dev-secrets.sh
       - name: Build and start the box + simulated ESP
-        run: scripts/sim.sh up
+        run: NO_MONITORING=1 scripts/sim.sh up   # monitoring isn't needed to test the alarm
       - name: alarm-core sees the node
         run: |
           # The step runs with bash -e: keep each attempt inside `if` so a

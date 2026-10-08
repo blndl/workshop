@@ -141,3 +141,15 @@ button.danger { background: var(--danger-bg); color: var(--danger); border-color
 @keyframes blink { 50% { opacity: 0.25; } }
 .buzzer { margin-left: auto; color: var(--muted); }
 .buzzer.on { color: var(--danger); font-weight: 800; animation: blink 0.5s infinite; }
+
+/* tabs */
+.tabs { margin-left: auto; display: flex; gap: 4px; background: var(--button); padding: 4px; border-radius: 10px; }
+.tab { padding: 6px 14px; border-radius: 7px; color: var(--muted); text-decoration: none; font-weight: 600; font-size: 0.9rem; }
+.tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 2px #0002; }
+
+/* metrics tab */
+.metrics-tab { display: flex; flex-direction: column; gap: 8px; }
+.metrics-bar { display: flex; justify-content: space-between; align-items: center; }
+.metrics-bar a { color: var(--info); font-size: 0.9rem; }
+.metrics-frame { width: 100%; height: calc(100vh - 120px); min-height: 600px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
+pre { background: var(--button); padding: 8px 12px; border-radius: 6px; }

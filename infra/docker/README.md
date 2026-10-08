@@ -18,6 +18,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 | (none) | `mosquitto`, `ntfy`, `postgres` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
 | `hub` | + `alarm-core`, `api`, `camera`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
 | `sim` | + `door-1` (simulated ESP) | `scripts/sim.sh up` (together with `hub`) |
+| `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `cadvisor` | with `sim.sh up`/`hub` unless `NO_MONITORING=1` ([details](../monitoring/README.md)) |
 | `probe` | `probe` (runs once) | `scripts/sim.sh probe` |
 
 ## Networks
@@ -48,6 +49,7 @@ segmentation OK
 |---|---|---|---|
 | 8000 | dashboard + API | 127.0.0.1 only (no login yet) | `API_PORT=8001 scripts/sim.sh up` |
 | 1883 | MQTT broker | 127.0.0.1 | `MQTT_BIND=0.0.0.0` to let a real ESP on the LAN connect |
+| 3000 | Grafana (also embedded in the dashboard's Metrics tab) | 127.0.0.1 | `GRAFANA_PORT` |
 | 8080 | ntfy (alerts) | all interfaces, so a phone on the same network can reach it | |
 
 ## Settings

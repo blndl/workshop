@@ -32,6 +32,7 @@ nodes = d.setdefault("nodes", {})
 for n in sys.argv[1:]:
     nodes.setdefault(n, {"key": secrets.token_hex(32), "password": pw()})
 d.setdefault("log_key", secrets.token_hex(32))
+d.setdefault("grafana", {"admin_password": pw()})
 # DEV ONLY codes: 1234 disarms, 9999 is the duress code.
 d.setdefault("codes", {"user": [code_hash("1234")], "duress": [code_hash("9999")]})
 
