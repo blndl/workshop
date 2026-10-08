@@ -27,6 +27,7 @@ modules:
 | `alarm_above` / `alarm_below` | numeric alarming sensors | The threshold that makes the sensor **active** |
 | `normal` | no | Typical reading: the simulator's starting value and its "Normal" button |
 | `label` | no | Display name (defaults to the sensor name) |
+| `confirm` | no | `person` (entry and instant sensors only): while armed, the camera must see someone before the sensor counts. No person → dismissed; no verdict within 8 s → counts anyway. |
 
 A sensor is **active** when an on/off sensor reports `1`, or a numeric one crosses its threshold.
 

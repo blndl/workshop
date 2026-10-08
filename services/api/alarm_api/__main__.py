@@ -71,7 +71,9 @@ def main(argv: list[str] | None = None) -> int:
         # Backfill from alarm-core's log so events from before the API started aren't missing.
         store = EventStore(os.environ["DATABASE_URL"], backfill_from=REPO / "data" / "events.jsonl")
     # GRAFANA_URL is the address the *browser* uses (the dashboard embeds it in its Metrics tab).
-    app = create_app(Bridge(transport, sim=args.sim, store=store), args.web, os.environ.get("GRAFANA_URL") or None)
+    bridge = Bridge(transport, sim=args.sim, store=store, history_from=REPO / "data" / "events.jsonl")
+    app = create_app(bridge, args.web, os.environ.get("GRAFANA_URL") or None,
+                     snapshots_dir=REPO / "data" / "snapshots")
     web = "dashboard at /" if (args.web / "index.html").exists() else "no dashboard build (cd web && npm run build)"
     print(f"[api] broker {host}:{port}; http://{args.host}:{args.port} ({web}, docs at /docs)" + (", SIM CONTROL ON" if args.sim else "") + (", events -> PostgreSQL" if store else ", no DATABASE_URL: events in memory only"))
     logging.getLogger("uvicorn.access").addFilter(_QuietPolling())

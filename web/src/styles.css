@@ -176,3 +176,44 @@ h3 .small { font-weight: 400; }
 .sim-row.numeric > * { flex: none; }
 .sim-reading { grid-column: 1 / -1; font-size: 0.85rem; }
 .sim-row input { width: 100%; min-width: 0; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+
+/* camera tab */
+.camera-tab { display: flex; flex-direction: column; gap: 16px; }
+.camera-top { display: grid; grid-template-columns: minmax(320px, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .camera-top { grid-template-columns: 1fr; } }
+.live header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.live-frame { aspect-ratio: 16 / 9; background: #111; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.live-frame img { width: 100%; height: 100%; object-fit: contain; }
+.live-off { color: #ccc; text-align: center; display: flex; flex-direction: column; gap: 6px; padding: 24px; max-width: 420px; }
+.live-off strong { color: #fff; font-size: 1.2rem; }
+.live-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; }
+.arm-like { background: var(--info); color: #fff; border: none; font-weight: 700; }
+.rec { animation: blink 1.2s infinite; }
+.verifying { border-left: 4px solid var(--info); display: flex; flex-direction: column; gap: 4px; background: var(--info-bg); }
+.tile.good { background: var(--ok-bg); border-color: transparent; }
+.tile.good strong { color: var(--ok); }
+dl.health { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 0.85rem; }
+dl.health dt { color: var(--muted); }
+dl.health dd { margin: 0; }
+
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; align-items: start; }
+.shot { padding: 0; text-align: left; display: flex; flex-direction: column; overflow: hidden; background: var(--card); }
+/* The whole photo, never cropped: detection boxes are placed against the full image. */
+.shot-img { position: relative; background: #111; overflow: hidden; }
+.shot-img img { width: 100%; height: auto; display: block; }
+.shot-img.large { width: fit-content; max-width: 100%; margin: 0 auto; }
+.shot-img.large img { width: auto; max-width: 100%; max-height: 75vh; }
+.shot-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; font-size: 0.8rem; }
+.box { position: absolute; border: 2px solid #f5b041; border-radius: 3px; pointer-events: none; }
+.box.person { border-color: #ff4d4f; }
+.box span { position: absolute; top: -1px; left: -1px; transform: translateY(-100%); background: inherit; font-size: 0.65rem; padding: 1px 4px; color: #fff; background-color: #f5b041; white-space: nowrap; }
+.box.person span { background-color: #ff4d4f; }
+.badge { padding: 2px 8px; border-radius: 999px; background: var(--button); color: var(--muted); font-weight: 600; font-size: 0.72rem; }
+.badge.person { background: var(--danger-bg); color: var(--danger); }
+.badge.clear { background: var(--ok-bg); color: var(--ok); }
+.badge.tampered { background: var(--danger); color: #fff; }
+
+.lightbox { position: fixed; inset: 0; background: #000b; display: flex; align-items: center; justify-content: center; z-index: 10; padding: 16px; }
+.lightbox-body { background: var(--card); border-radius: 12px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr); gap: 16px; padding: 16px; max-width: 1200px; width: 100%; }
+@media (max-width: 800px) { .lightbox-body { grid-template-columns: 1fr; } }
+.lightbox-info { display: flex; flex-direction: column; gap: 10px; }

@@ -29,7 +29,7 @@ Needs Docker Desktop (or Docker on Linux). No Python or Node setup required.
 ```bash
 scripts/dev-secrets.sh        # once: keys for every module, passwords, dev codes
 scripts/dev-ntfy.sh           # once: alert accounts (prints the phone/browser login)
-scripts/sim.sh up             # builds the image; starts the core, both simulated modules and monitoring
+scripts/sim.sh up             # builds the image, fetches the AI model; starts the core, both modules, monitoring
 ```
 
 Open **http://127.0.0.1:8000**.
@@ -37,6 +37,8 @@ Open **http://127.0.0.1:8000**.
 - **Intrusion:** arm with `1234`, then click **Open door** in the simulator panel at the bottom. After the 10 s entry delay the alarm triggers, the modules' buzzers turn on, and an alert with a photo arrives at http://localhost:8080.
 - **Safety alarm:** click **Alarm** next to Gas in env-1's simulator controls, even while disarmed. The buzzers sound and an urgent alert goes out. Entering a code and pressing **Disarm** silences it; **Normal** clears it.
 - **Attacks:** pick one in a module's simulator controls (spoof, replay…) and click **Run attack**. It's rejected and counted, and the alarm isn't fooled.
+- **Camera tab:** the live feed while armed (or a 2-minute **live view** while disarmed, recorded in the log), the photos with what the AI saw (boxes, "person 89%"), an integrity check of each photo against the log, and how many false alarms the person check avoided.
+- **Vision:** door-1's motion sensor only counts if the camera sees a person. With the default fake camera nobody is in the picture, so **Trigger motion** while armed is *dismissed*, like a cat. To see it confirmed, put photos with people in `data/test-images/` and run `CAMERA_SOURCE=--images=/app/data/test-images scripts/sim.sh up`.
 - **Metrics tab:** Grafana, with signal and readings per module, attacks, events, the database, CPU and memory for every container, the history, and all the logs ([infra/monitoring](infra/monitoring/README.md)).
 
 | Command | What it does |
@@ -81,7 +83,8 @@ To edit a service and run it directly (or use the Mac's real webcam), start only
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e 'protocol/python[mqtt,dev]' -e 'simulator[dev]' -e 'services/alarm-core[dev]' \
-                      -e 'services/camera[dev,webcam]' -e 'services/notifier[dev]' -e 'services/api[dev]'
+                      -e 'services/camera[dev,webcam]' -e 'services/notifier[dev]' -e 'services/api[dev]' \
+                      -e 'services/detector[dev]'
 cd web && npm install && npm run build && cd ..
 
 docker compose -f infra/docker/compose.yml up -d        # broker + ntfy + PostgreSQL only
@@ -94,6 +97,7 @@ docker compose -f infra/docker/compose.yml up -d        # broker + ntfy + Postgr
 | 3 | `.venv/bin/python -m alarm_sim node --node door-1 --headless` | simulated door module (drop `--headless` to type commands) |
 | 4 | `.venv/bin/python -m alarm_sim node --node env-1 --headless` | simulated environment module |
 | 5 | `.venv/bin/python -m alarm_camera run` (or `--fake run`) | snapshots while armed |
+| 5b | `.venv/bin/python -m alarm_detector run` | person detection (`scripts/get-model.sh` first) |
 | 6 | `.venv/bin/python -m alarm_notifier run` | phone alerts |
 
 Run **either** this **or** `scripts/sim.sh up`, never both: they'd share port 8000, and two copies of each module would fight over the same identity. Started this way, the API keeps events in memory only (it saves to PostgreSQL when `DATABASE_URL` is set) and the Metrics tab stays empty (it needs `GRAFANA_URL`).
@@ -103,7 +107,7 @@ For live reload of the dashboard: `cd web && npm run dev`, then open http://loca
 ## Tests
 
 ```bash
-.venv/bin/pytest protocol/python simulator services/alarm-core services/camera services/notifier services/api
+.venv/bin/pytest protocol/python simulator services/alarm-core services/camera services/detector services/notifier services/api
 .venv/bin/python -m alarm_sim selftest      # attack and failure scenarios
 cd web && npm run build                     # includes the TypeScript check
 ```
@@ -132,7 +136,7 @@ CI runs all of this on every push. It also starts the whole stack in Docker, wai
 | Alarm logic, events, tamper-evident log | [services/alarm-core](services/alarm-core/README.md) |
 | Simulator, attacks, scenarios | [simulator](simulator/README.md) |
 | API, event database | [services/api](services/api/README.md) |
-| Camera, notifier | [services/camera](services/camera/README.md) · [services/notifier](services/notifier/README.md) |
+| Camera, person detection, notifier | [services/camera](services/camera/README.md) · [services/detector](services/detector/README.md) · [services/notifier](services/notifier/README.md) |
 | Dashboard | [web](web/README.md) |
 | Docker stack, networks, ports | [infra/docker](infra/docker/README.md) |
 | Monitoring | [infra/monitoring](infra/monitoring/README.md) |
@@ -148,13 +152,13 @@ CI runs all of this on every push. It also starts the whole stack in Docker, wai
 | `services/api/` | FastAPI backend: dashboard API, metrics, event database |
 | `services/camera/` | Snapshots while armed |
 | `services/notifier/` | Phone alerts through ntfy |
-| `services/detector/` | Person detection (to do) |
+| `services/detector/` | Person detection (YOLOv8n) on the camera's photos |
 | `web/` | React dashboard |
 | `infra/` | Docker image and Compose stack, monitoring; Ansible and VPN later |
 | `scripts/` | `dev-secrets.sh`, `dev-ntfy.sh`, `sim.sh` |
 | `docs/` | Module guide; report later |
 | `firmware/`, `hardware/`, `cloud/`, `security/` | To do: ESP firmware, wiring, off-site parts, threat model and pentest |
-| `.secrets/`, `data/` | Created at run time, never committed: secrets, event log and photos |
+| `.secrets/`, `data/`, `models/` | Created at run time, never committed: secrets, event log and photos, the AI model |
 
 ## Status
 
@@ -162,7 +166,7 @@ CI runs all of this on every push. It also starts the whole stack in Docker, wai
 |---|---|---|
 | 0. Stabilise | CI green, PostgreSQL merged, branch protection, integrate the YOLO branch | Mostly done (YOLO integration pending) |
 | 1. Module framework | `modules.yaml`, sensor roles, safety alarms, generic simulator and dashboard | **Done** |
-| 2. Vision | Detector service (YOLOv8n), "motion needs a person" rule, false-alarm evaluation | Next |
+| 2. Vision | Detector service (YOLOv8n), "motion needs a person" rule, Camera tab, evaluation tool | **Done** (the evaluation dataset is yours to build: `alarm_detector evaluate`) |
 | 3. Environment | Real env module: the C++ simulator / firmware speaking the protocol | Next |
 | 4. Platform | Login + 2FA, live updates, photos in the dashboard, the core on a hardened VM, Tailscale | Started: API, dashboard, Docker, PostgreSQL and monitoring done |
 | 5. Security and report | Threat model per module, pentest, GDPR, demo | To do |

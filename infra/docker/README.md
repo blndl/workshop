@@ -16,7 +16,7 @@ Usually you don't call Compose directly: [`scripts/sim.sh`](../../scripts/sim.sh
 | Profile | Containers | Started by |
 |---|---|---|
 | (none) | `mosquitto`, `ntfy`, `postgres` | `docker compose -f infra/docker/compose.yml up -d`: for running the services on your machine |
-| `hub` | + `alarm-core`, `api`, `camera`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
+| `hub` | + `alarm-core`, `api`, `camera`, `detector`, `notifier` | `scripts/sim.sh hub`: the box, waiting for a real ESP |
 | `sim` | + `door-1`, `env-1` (simulated modules, one container each) | `scripts/sim.sh up` (together with `hub`) |
 | `monitoring` | `prometheus`, `grafana`, `loki`, `alloy`, `node-exporter`, `cadvisor` | with `sim.sh up`/`hub` unless `NO_MONITORING=1` ([details](../monitoring/README.md)) |
 | `probe` | `probe` (runs once) | `scripts/sim.sh probe` |
@@ -62,7 +62,7 @@ Environment variables read by `compose.yml` (set them before `scripts/sim.sh` or
 | `ALARM_SIM` | 0 (1 with `sim.sh up`) | Show the simulator panel on the dashboard |
 | `API_PORT` | 8000 | Host port for the dashboard |
 | `MQTT_BIND` | 127.0.0.1 | Host address the broker listens on |
-| `CAMERA_SOURCE` | `--fake` | Camera input: `--fake` (generated frames), `--images=/app/data/test-images`, or `--device=0` |
+| `CAMERA_SOURCE` | `--fake` | Camera input: `--fake` (generated frames, nobody in them), `--images=/app/data/test-images` (cycles through your photos: put people in them to see motion confirmed), or `--device=0` (Linux webcam) |
 | `NTFY_BASE_URL` | set by `scripts/dev-ntfy.sh` | Address the phone uses for ntfy (attachment links) |
 
 ## Data and secrets

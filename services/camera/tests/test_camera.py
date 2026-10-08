@@ -102,3 +102,37 @@ def test_failed_camera_is_reported_once(tmp_path):
         svc.tick(t)
     errors = [json.loads(p) for t, p in bus.log if t == SNAPSHOTS_TOPIC]
     assert errors == [{"type": "camera_error", "error": "no camera"}]
+
+
+def test_verify_request_takes_a_burst():
+    p = CapturePolicy()
+    p.on_event(state("armed"), 0)
+    p.on_event({"type": "verify", "node": "door-1", "sensor": "pir"}, 1)
+    assert [r for _, r in run_policy(p, 1, 3)] == ["verify-1", "verify-2", "verify-3"]
+
+
+def test_live_view_opens_the_camera_while_disarmed_then_ends():
+    p = CapturePolicy()
+    assert not p.camera_wanted and p.why.startswith("off")
+    p.on_event({"type": "live_view", "on": True, "seconds": 120}, 0)
+    assert p.camera_wanted and p.why == "live view"
+    assert run_policy(p, 0, 5) == []  # watching only: no photos are stored
+    p.due(121)
+    assert not p.camera_wanted
+
+
+def test_camera_streams_frames_and_status_without_file_names(tmp_path):
+    from alarm_protocol.transport import MemoryBus
+
+    bus = MemoryBus()
+    src = FakeSource(b"\xff\xd8frame")
+    svc = CameraService(src, SnapshotStore(tmp_path), bus.client(), log=lambda _m: None)
+    bus.client().publish("alarm/events", json.dumps({"type": "live_view", "on": True, "seconds": 60}))
+    t = 0.0
+    while t < 2:
+        svc.tick(t)
+        t += 0.1
+    frames = [p for topic, p in bus.log if topic == "alarm/camera/frame"]
+    status = [json.loads(p) for topic, p in bus.log if topic == "alarm/camera/status"]
+    assert len(frames) >= 3 and status[-1]["open"] and status[-1]["why"] == "live view"
+    assert not any("path" in s or "last_snapshot" in s for s in status)

@@ -18,6 +18,12 @@ Sensors are handled by the role their module description gives them
     module link lost while arming/armed/entry -> TRIGGERED immediately (fail-secure)
     duress code -> disarms like a normal code, plus a silent 'duress' event
 
+Vision (sensors with `confirm: person`): when such a sensor becomes active while
+armed, the machine emits 'verify' and waits for the detector's results on the
+camera's verify burst. A person -> the sensor counts ('motion_confirmed'). No
+person on the whole burst -> 'motion_dismissed' (a cat, a curtain). No answer
+within verify_timeout -> it counts anyway ('verify_timeout'): fail-secure.
+
 A sensor is "active" when a binary one reports 1, or a numeric one crosses
 its alarm_above / alarm_below threshold.
 
@@ -41,6 +47,11 @@ class Timing:
     exit_delay: float = 30.0
     entry_delay: float = 30.0
     siren_max: float = 180.0  # French rules cap outdoor sirens at 3 minutes
+    verify_timeout: float = 8.0  # vision check; after that the sensor counts anyway
+    live_view_max: float = 120.0  # camera live view while disarmed, then it turns itself off
+
+
+VERIFY_SHOTS = 3  # the camera's verify burst; all must show nobody to dismiss
 
 
 class AlarmMachine:
@@ -74,6 +85,8 @@ class AlarmMachine:
         self.request: str | None = None  # set by the service so replies can be matched
         self._deadline: float | None = None
         self._siren_until: float | None = None
+        self.verify: dict | None = None  # pending vision check
+        self.live_until: float | None = None  # camera live view (while disarmed)
 
     # --- outputs --------------------------------------------------------
 
@@ -92,6 +105,8 @@ class AlarmMachine:
             "safety": [{"node": n, "sensor": s, **d, "since_s": round(now - d["since"], 1)}
                        for (n, s), d in self.safety.items()],
             "safety_silenced": self.safety_silenced,
+            "verifying": {k: self.verify[k] for k in ("node", "sensor")} if self.verify else None,
+            "live_view_s": round(self.live_until - now, 1) if self.live_until and self.live_until > now else 0,
             "nodes": {n: self._node_snapshot(n, now) for n in self.online},
         }
 
@@ -146,6 +161,7 @@ class AlarmMachine:
         elif new == DISARMED:
             self.siren = False
             self._siren_until = None
+            self.verify = None
         fields = {"state": new, "prev": prev, "reason": reason}
         if node:
             fields["node"] = node
@@ -262,18 +278,58 @@ class AlarmMachine:
                 self._emit("tamper", node=node, sensor=name)
             elif self.state != TRIGGERED:
                 self._set_state(TRIGGERED, now, f"tamper:{name}", node)
-        elif role == "entry":
-            if self.state == ARMED:
-                self._set_state(ENTRY_DELAY, now, name, node)
-        elif role == "instant":
-            if self.state in (ARMED, ENTRY_DELAY):
-                self._set_state(TRIGGERED, now, name, node)
+        elif role in ("entry", "instant"):
+            counts = self.state == ARMED or (role == "instant" and self.state == ENTRY_DELAY)
+            if not counts:
+                return
+            if spec.confirm == "person":
+                if self.verify is None:
+                    self.verify = {"node": node, "sensor": name, "role": role,
+                                   "deadline": now + self.timing.verify_timeout, "negatives": 0, "objects": {}}
+                    self._emit("verify", node=node, sensor=name, timeout=self.timing.verify_timeout)
+                return
+            self._intrusion(node, name, role, name, now)
         elif role == "safety":
             self.safety[(node, name)] = {"kind": spec.kind, "value": value, "unit": spec.unit, "since": now}
             self.safety_silenced = False  # a new safety alarm sounds again
             self._emit("safety_alarm", node=node, sensor=name, kind=spec.kind, value=value, unit=spec.unit,
                        threshold=spec.alarm_above if spec.alarm_above is not None else spec.alarm_below)
         # telemetry: never active, nothing to do
+
+    def _intrusion(self, node: str, sensor: str, role: str, reason: str, now: float) -> None:
+        if role == "entry" and self.state == ARMED:
+            self._set_state(ENTRY_DELAY, now, reason, node)
+        elif role == "instant" and self.state in (ARMED, ENTRY_DELAY):
+            self._set_state(TRIGGERED, now, reason, node)
+
+    # --- vision ---------------------------------------------------------
+
+    def detection(self, result: dict, now: float) -> None:
+        """A detector result for a snapshot. Only the verify burst counts towards a pending check."""
+        v = self.verify
+        if v is None or not str(result.get("reason", "")).startswith("verify"):
+            return
+        if result.get("person"):
+            self.verify = None
+            self._emit("motion_confirmed", node=v["node"], sensor=v["sensor"],
+                       confidence=result.get("confidence"), path=result.get("path"))
+            self._intrusion(v["node"], v["sensor"], v["role"], f"{v['sensor']} (person seen)", now)
+            return
+        v["negatives"] += 1
+        for label, n in (result.get("objects") or {}).items():
+            v["objects"][label] = max(v["objects"].get(label, 0), n)
+        if v["negatives"] >= VERIFY_SHOTS:
+            self.verify = None
+            self._emit("motion_dismissed", node=v["node"], sensor=v["sensor"], seen=v["objects"])
+
+    def live_view(self, on: bool, now: float, source: str = "unknown") -> None:
+        """Turn the camera on for viewing while disarmed (it's on anyway when armed). Logged."""
+        if on:
+            self.live_until = now + self.timing.live_view_max
+            self._emit("live_view", on=True, seconds=self.timing.live_view_max, source=source)
+        elif self.live_until is not None:
+            self.live_until = None
+            self._emit("live_view", on=False, source=source)
 
     def _safety_clear(self, node: str, name: str, value: str) -> None:
         if self.safety.pop((node, name), None) is not None:
@@ -292,3 +348,10 @@ class AlarmMachine:
         if self.siren and self._siren_until is not None and now >= self._siren_until:
             self.siren = False
             self._emit("siren_timeout", seconds=self.timing.siren_max)
+        if self.verify is not None and now >= self.verify["deadline"]:
+            v, self.verify = self.verify, None
+            self._emit("verify_timeout", node=v["node"], sensor=v["sensor"], answers=v["negatives"])
+            self._intrusion(v["node"], v["sensor"], v["role"], f"{v['sensor']} (not verified)", now)
+        if self.live_until is not None and now >= self.live_until:
+            self.live_until = None
+            self._emit("live_view", on=False, source="timeout")

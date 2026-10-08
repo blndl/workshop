@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { CameraTab } from "./components/CameraTab";
 import { Keypad } from "./components/Keypad";
 import { Metrics } from "./components/Metrics";
 import { MetricsTab } from "./components/MetricsTab";
@@ -11,8 +12,9 @@ import { usePoll } from "./usePoll";
 
 const RSSI_POINTS = 120; // 2 minutes at one sample per second
 
-type Tab = "overview" | "metrics";
-const tabFromHash = (): Tab => (window.location.hash === "#metrics" ? "metrics" : "overview");
+type Tab = "overview" | "camera" | "metrics";
+const TABS: Tab[] = ["overview", "camera", "metrics"];
+const tabFromHash = (): Tab => TABS.find((t) => window.location.hash === `#${t}`) ?? "overview";
 
 export function App() {
   const state = usePoll(api.state, 1000);
@@ -62,12 +64,15 @@ export function App() {
         </span>
         <nav className="tabs" aria-label="views">
           <a href="#overview" className={tab === "overview" ? "tab active" : "tab"}>Overview</a>
+          <a href="#camera" className={tab === "camera" ? "tab active" : "tab"}>Camera</a>
           <a href="#metrics" className={tab === "metrics" ? "tab active" : "tab"}>Metrics</a>
         </nav>
       </header>
 
       {tab === "metrics" ? (
         <MetricsTab />
+      ) : tab === "camera" ? (
+        <CameraTab />
       ) : (
       <>
       <main className="grid">

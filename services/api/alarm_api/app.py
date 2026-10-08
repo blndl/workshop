@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import camera
 from .bridge import AlarmCoreTimeout, Bridge
 from .metrics import CONTENT_TYPE_LATEST, Metrics
 
@@ -69,7 +70,8 @@ def outcome(events: list[dict]) -> dict:
     return {"result": "no_change"}
 
 
-def create_app(bridge: Bridge, web_dir: Path | None = None, grafana_url: str | None = None) -> FastAPI:
+def create_app(bridge: Bridge, web_dir: Path | None = None, grafana_url: str | None = None,
+               snapshots_dir: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
         bridge.start()
@@ -156,6 +158,8 @@ def create_app(bridge: Bridge, web_dir: Path | None = None, grafana_url: str | N
             raise HTTPException(404, "simulator control is disabled (start the API with --sim)")
         bridge.sim_command(node, cmd.model_dump(exclude_none=True))
         return {"sent": True}
+
+    app.include_router(camera.router(bridge, snapshots_dir))
 
     # The React dashboard (web/dist after `npm run build`), served last so /api wins.
     if web_dir and (web_dir / "index.html").exists():

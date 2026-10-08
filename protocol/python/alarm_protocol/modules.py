@@ -56,6 +56,7 @@ class SensorSpec:
     alarm_below: float | None = None
     normal: float | None = None  # simulator baseline for numeric sensors
     label: str = ""
+    confirm: str | None = None  # "person": the camera must see someone before it counts
 
     def is_active(self, value: str) -> bool | None:
         """Active (alarm condition) for a reported value; None if the value is invalid."""
@@ -74,7 +75,7 @@ class SensorSpec:
     def info(self) -> dict:
         """What the dashboard needs to display this sensor."""
         out = {"kind": self.kind, "role": self.role, "binary": self.binary, "label": self.label or self.name}
-        for key in ("unit", "alarm_above", "alarm_below", "normal"):
+        for key in ("unit", "alarm_above", "alarm_below", "normal", "confirm"):
             value = getattr(self, key)
             if value not in (None, ""):
                 out[key] = value
@@ -105,7 +106,7 @@ def _sensor(module: str, name: str, raw) -> SensorSpec:
         raise ModuleError(f"{where}: sensor names are 1-16 chars of a-z, 0-9, _ starting with a letter")
     if not isinstance(raw, dict):
         raise ModuleError(f"{where}: expected a mapping like {{kind: contact, role: entry}}")
-    unknown = set(raw) - {"kind", "role", "unit", "alarm_above", "alarm_below", "normal", "label", "binary"}
+    unknown = set(raw) - {"kind", "role", "unit", "alarm_above", "alarm_below", "normal", "label", "binary", "confirm"}
     if unknown:
         raise ModuleError(f"{where}: unknown keys {sorted(unknown)}")
     kind, role = raw.get("kind"), raw.get("role")
@@ -127,8 +128,11 @@ def _sensor(module: str, name: str, raw) -> SensorSpec:
         raise ModuleError(f"{where}: a numeric {role} sensor needs alarm_above or alarm_below")
     if role == "telemetry" and has_threshold:
         raise ModuleError(f"{where}: telemetry sensors never alarm; drop the threshold or change the role")
+    confirm = raw.get("confirm")
+    if confirm is not None and (confirm != "person" or role not in ("entry", "instant")):
+        raise ModuleError(f"{where}: 'confirm: person' only applies to entry and instant sensors")
     return SensorSpec(name, kind, role, bool(binary), str(raw.get("unit", "")), nums.get("alarm_above"),
-                      nums.get("alarm_below"), nums.get("normal"), str(raw.get("label", "")))
+                      nums.get("alarm_below"), nums.get("normal"), str(raw.get("label", "")), confirm)
 
 
 def parse(data) -> Config:

@@ -8,6 +8,10 @@
 #         tamper     always watched (triggers when armed, warns when disarmed)
 #         safety     alarms whatever the arm state (gas, smoke, water...)
 #         telemetry  never alarms; charted
+#
+# confirm: person (entry/instant sensors): when armed, the camera takes a burst
+# and the detector must see a person before the sensor counts. No person: the
+# motion is dismissed (a cat, a curtain). Detector down or too slow: it counts.
 
 modules:
   door-1:
@@ -15,7 +19,7 @@ modules:
     name: Front door
     sensors:
       door: {kind: contact, role: entry, label: Door}
-      pir:  {kind: motion,  role: entry, label: Motion}
+      pir:  {kind: motion,  role: entry, label: Motion, confirm: person}   # the camera must see someone
       lid:  {kind: tamper,  role: tamper, label: Lid}
     outputs: [buzzer, led]
 
