@@ -2,6 +2,7 @@
 # Run the whole alarm system in Docker.
 #
 #   scripts/sim.sh up            # the box + a simulated ESP, short delays, simulator panel on
+#                                # ENV_NODE=cpp: env-1 from the C++ edge simulator (ENV_SCENARIO=gas_leak...)
 #   scripts/sim.sh hub           # the box only (real ESP, normal 30 s delays, no simulator panel)
 #                                # both also start monitoring (Grafana...); NO_MONITORING=1 to skip
 #   scripts/sim.sh down          # stop everything (data/ and ntfy accounts are kept)
@@ -45,8 +46,15 @@ after_start() {
 case "${1:-help}" in
   up)
     need_secrets
+    ENV_PROFILE=() ENV_UP=()
+    if [[ "${ENV_NODE:-}" == cpp ]]; then
+      ENV_PROFILE=(--profile sim-cpp) ENV_UP=(--scale env-1=0)   # the C++ env-1 replaces the Python one
+    else
+      "${COMPOSE[@]}" --profile sim-cpp rm -sf env-1-cpp >/dev/null 2>&1 || true
+    fi
     GRAFANA_ADMIN_PASSWORD=$(grafana_password) ALARM_SIM=1 EXIT_DELAY=${EXIT_DELAY:-5} ENTRY_DELAY=${ENTRY_DELAY:-10} \
-      "${COMPOSE[@]}" --profile hub --profile sim ${MONITORING[@]+"${MONITORING[@]}"} up -d --build
+      "${COMPOSE[@]}" --profile hub --profile sim ${ENV_PROFILE[@]+"${ENV_PROFILE[@]}"} ${MONITORING[@]+"${MONITORING[@]}"} \
+      up -d --build ${ENV_UP[@]+"${ENV_UP[@]}"}
     echo
     echo "dashboard:  http://127.0.0.1:${API_PORT:-8000}   (simulator panel at the bottom)"
     after_start
@@ -58,12 +66,12 @@ case "${1:-help}" in
     echo "dashboard: http://127.0.0.1:${API_PORT:-8000}"
     after_start
     ;;
-  down) "${COMPOSE[@]}" --profile hub --profile sim --profile probe --profile monitoring down ;;
+  down) "${COMPOSE[@]}" --profile hub --profile sim --profile sim-cpp --profile probe --profile monitoring down ;;
   status) core ctl status ;;
   arm|disarm) core ctl "$1" "${2:?code}" ;;
   verify) core verify-log --snapshots ;;
   probe) "${COMPOSE[@]}" --profile probe run --rm --build probe ;;
-  logs) shift; "${COMPOSE[@]}" --profile hub --profile sim --profile monitoring logs -f --tail 50 "$@" ;;
-  ps) "${COMPOSE[@]}" --profile hub --profile sim --profile monitoring ps ;;
+  logs) shift; "${COMPOSE[@]}" --profile hub --profile sim --profile sim-cpp --profile monitoring logs -f --tail 50 "$@" ;;
+  ps) "${COMPOSE[@]}" --profile hub --profile sim --profile sim-cpp --profile monitoring ps ;;
   *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

@@ -136,6 +136,26 @@ services:
     command: [python, -m, alarm_sim, --broker, "mosquitto:1883", node, --node, env-1, --headless]
     networks: [iot]
 
+  # The same env-1, from the C++ edge simulator (IA_VISON/edge-simulator) over the encrypted
+  # protocol. ENV_NODE=cpp scripts/sim.sh up runs it instead of the Python one.
+  env-1-cpp:
+    image: alarm-node
+    build:
+      context: ../..
+      dockerfile: IA_VISON/edge-simulator/Dockerfile.alarm
+    profiles: [sim-cpp]
+    environment:
+      NODE_ID: env-1
+      SCENARIO: ${ENV_SCENARIO:-normal}   # normal, gas_leak, overheat, combined_attack, humidity_low/high
+      SECRETS: /app/.secrets/dev.json
+      MQTT_HOST: mosquitto
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - ../../.secrets:/app/.secrets:ro
+    depends_on: [mosquitto]
+    restart: unless-stopped
+    networks: [iot]
+
   # Segmentation check: a device on the house Wi-Fi tries to reach everything.
   probe:
     <<: *service

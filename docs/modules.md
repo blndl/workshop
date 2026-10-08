@@ -70,6 +70,15 @@ gas=121.4,temp=21.1,hum=45.3,lid=0,...       env-1
 - Sensor names must match the description exactly (`[a-z][a-z0-9_]{0,15}`).
 - Values the core can't read (`lots`, `2` for an on/off sensor) are ignored and the last good value is kept.
 
+## Implementations
+
+| Language | Where | Used by |
+|---|---|---|
+| Python | [protocol/python](../protocol/python) | The core, and the Python simulator (any module, from its description) |
+| C++17 | [protocol/cpp](../protocol/cpp) | The edge simulator as env-1 (`ENV_NODE=cpp scripts/sim.sh up`), and the base for the ESP firmware |
+
+Both are tested against [`protocol/test-vectors.json`](../protocol/test-vectors.json).
+
 ## Not yet
 
 - **Core modules** (camera, detector…) aren't declared in this file yet. They run as Docker services; declaring them, so their health shows up the same way, is roadmap step 2.5.

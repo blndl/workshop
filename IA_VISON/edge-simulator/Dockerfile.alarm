@@ -1,0 +1,20 @@
+# alarm-node image: the edge simulator as an alarm module (encrypted protocol).
+# Build context = repo root (needs protocol/): see infra/docker/compose.yml (env-1-cpp).
+FROM debian:bookworm-slim AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake pkg-config libmosquitto-dev nlohmann-json3-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY protocol/test-vectors.json protocol/test-vectors.json
+COPY protocol/cpp protocol/cpp
+COPY IA_VISON/edge-simulator IA_VISON/edge-simulator
+RUN cmake -S IA_VISON/edge-simulator -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON \
+    && cmake --build build --parallel \
+    && ctest --test-dir build --output-on-failure
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libmosquitto1 libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /build/build/alarm-node /usr/local/bin/alarm-node
+COPY --from=build /build/build/sentinel-edge /usr/local/bin/sentinel-edge
+ENTRYPOINT ["/usr/local/bin/alarm-node"]
