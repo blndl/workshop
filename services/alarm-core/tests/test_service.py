@@ -182,3 +182,31 @@ def test_state_carries_node_metrics(rig):
     assert -70 <= node["rssi"] <= -50 and node["uptime"] >= 10
     assert node["seen_ago"] is not None and node["seen_ago"] < 1.5
     assert node["security"] == {"auth_fail": 1}
+
+
+def test_gas_leak_end_to_end():
+    from alarm_protocol.modules import load
+    from pathlib import Path
+
+    modules = load(Path(__file__).resolve().parents[3] / "config" / "modules.yaml").modules
+    env = modules["env-1"]
+    bus, clock = MemoryBus(), FakeClock()
+    codes = CodeChecker([hash_code("1234", 1000)], [])
+    machine = AlarmMachine({"env-1": env}, codes, Timing())
+    service = AlarmService({"env-1": KEY}, machine, bus.client(), log=lambda _m: None, wall=lambda: 0.0)
+    node = SimNode("env-1", KEY, bus.client(), log=lambda _m: None, module=env)
+    service.start(), node.start()
+
+    def run(seconds):
+        end = clock.t + seconds
+        while clock.t < end:
+            node.tick(clock.t), service.tick(clock.t)
+            clock.sleep(0.05)
+
+    run(3)
+    assert float(machine.sensors["env-1"]["gas"]) < 400 and not machine.safety
+    node.set(clock.t, gas=650)
+    run(0.5)
+    assert ("env-1", "gas") in machine.safety
+    assert node.outputs == {"buzzer": "1", "led": "alarm"}  # the module's own buzzer sounds
+    assert [e["type"] for e in service.published if e["type"].startswith("safety")] == ["safety_alarm"]

@@ -46,6 +46,13 @@ class _StateCollector:
             yield GaugeMetricFamily("alarm_siren", "Siren on (1/0)", value=int(bool(state.get("siren"))))
             yield GaugeMetricFamily("alarm_delay_remaining_seconds", "Exit/entry delay left, 0 if none",
                                     value=state.get("deadline_in") or 0)
+            safety = GaugeMetricFamily("alarm_safety_active", "Active safety alarm (gas, smoke…), 1 per sensor",
+                                       labels=["node", "sensor"])
+            for a in state.get("safety") or []:
+                safety.add_metric([_label(a.get("node")), _label(a.get("sensor"))], 1)
+            yield safety
+            yield GaugeMetricFamily("alarm_safety_silenced", "Safety alarm silenced with a code (1/0)",
+                                    value=int(bool(state.get("safety_silenced"))))
             if state.get("log"):
                 yield GaugeMetricFamily("alarm_log_records", "Records in alarm-core's tamper-evident log",
                                         value=state["log"].get("seq", 0))
@@ -57,7 +64,9 @@ class _StateCollector:
         rssi = GaugeMetricFamily("alarm_node_rssi_dbm", "Module Wi-Fi signal (dBm)", labels=["node"])
         uptime = GaugeMetricFamily("alarm_node_uptime_seconds", "Module uptime", labels=["node"])
         seen = GaugeMetricFamily("alarm_node_seen_ago_seconds", "Seconds since the module was last heard", labels=["node"])
-        sensor = GaugeMetricFamily("alarm_node_sensor_active", "Sensor active (1) or not (0)", labels=["node", "sensor"])
+        sensor = GaugeMetricFamily("alarm_node_sensor_active", "Sensor in its alarm condition (1) or not (0)", labels=["node", "sensor"])
+        value = GaugeMetricFamily("alarm_node_sensor_value", "Numeric sensor reading (unit in the module description)",
+                                  labels=["node", "sensor", "unit"])
         rejected = GaugeMetricFamily("alarm_node_rejected_messages", "Forged/replayed messages rejected since alarm-core started",
                                      labels=["node", "kind"])
         for name, n in nodes.items():
@@ -69,11 +78,19 @@ class _StateCollector:
                 uptime.add_metric([node], n["uptime"])
             if n.get("seen_ago") is not None:
                 seen.add_metric([node], n["seen_ago"])
+            info = n.get("info") or {}
+            active = n.get("active") or {}
             for s, v in (n.get("sensors") or {}).items():
-                sensor.add_metric([node, _label(s)], int(v == "1"))
+                sensor.add_metric([node, _label(s)], int(bool(active.get(s, v == "1"))))
+                spec = info.get(s) or {}
+                if spec and not spec.get("binary", True):
+                    try:
+                        value.add_metric([node, _label(s), _label(spec.get("unit", ""), 8)], float(v))
+                    except (TypeError, ValueError):
+                        pass
             for kind, count in (n.get("security") or {}).items():
                 rejected.add_metric([node, _label(kind)], count)
-        yield from (online, rssi, uptime, seen, sensor, rejected)
+        yield from (online, rssi, uptime, seen, sensor, value, rejected)
 
     def _database(self):
         store = self.bridge.store
@@ -93,6 +110,7 @@ class Metrics:
         self.events = Counter("alarm_events", "Events from alarm-core, by type", ["type"], registry=r)
         self.state_changes = Counter("alarm_state_changes", "State changes, by new state", ["state"], registry=r)
         self.security = Counter("alarm_security_events", "Rejected forged/replayed messages", ["node", "kind"], registry=r)
+        self.safety_alarms = Counter("alarm_safety_alarms", "Safety alarms raised", ["node", "sensor"], registry=r)
         self.sensor_changes = Counter("alarm_sensor_changes", "Sensor changes", ["node", "sensor", "value"], registry=r)
         self.http = Histogram("alarm_api_request_duration_seconds", "API request duration",
                               ["method", "route", "status"], registry=r,
@@ -108,6 +126,8 @@ class Metrics:
             self.state_changes.labels(_label(e.get("state"))).inc()
         elif t == "security":
             self.security.labels(_label(e.get("node")), _label(e.get("kind"))).inc()
+        elif t == "safety_alarm":
+            self.safety_alarms.labels(_label(e.get("node")), _label(e.get("sensor"))).inc()
         elif t == "sensor":
             self.sensor_changes.labels(_label(e.get("node")), _label(e.get("sensor")), _label(e.get("value"))).inc()
 

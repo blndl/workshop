@@ -22,11 +22,6 @@ export const STATE_LABEL: Record<string, string> = {
   triggered: "ALARM",
 };
 
-const SENSOR_WORDS: Record<string, [string, string]> = {
-  door: ["closed", "opened"],
-  pir: ["no motion", "motion"],
-  lid: ["closed", "opened"],
-};
 
 /** One line of text and a severity for the timeline. */
 export function describe(e: AlarmEvent): { text: string; severity: Severity } {
@@ -37,9 +32,17 @@ export function describe(e: AlarmEvent): { text: string; severity: Severity } {
       return { text: `${STATE_LABEL[e.prev as string] ?? e.prev} → ${STATE_LABEL[e.state as string] ?? e.state}: ${e.reason}`, severity: sev };
     }
     case "sensor": {
-      const words = SENSOR_WORDS[e.sensor as string] ?? ["0", "1"];
-      return { text: `${e.sensor} ${words[e.value === "1" ? 1 : 0]}${node}`, severity: "info" };
+      const active = e.active ?? e.value === "1";
+      const binary = e.value === "0" || e.value === "1";
+      const text = binary ? `${e.sensor} ${active ? "active" : "back to normal"}` : `${e.sensor} ${active ? "above its limit" : "back to normal"}: ${e.value}`;
+      return { text: `${text}${node}`, severity: active ? "warn" : "info" };
     }
+    case "safety_alarm":
+      return { text: `SAFETY ALARM: ${e.sensor} = ${e.value}${e.unit ? ` ${e.unit}` : ""}${node}`, severity: "danger" };
+    case "safety_clear":
+      return { text: `Safety alarm cleared: ${e.sensor} = ${e.value}${node}`, severity: "ok" };
+    case "safety_silenced":
+      return { text: `Safety alarm silenced (${e.source})`, severity: "warn" };
     case "security":
       return { text: `Rejected ${e.kind === "replay" ? "replayed" : "forged"} message${node}`, severity: "danger" };
     case "link_lost":

@@ -24,6 +24,7 @@ x-service: &service
   volumes:
     - ../../.secrets:/app/.secrets:ro
     - ../../data:/app/data
+    - ../../config:/app/config:ro     # module descriptions: edit, then restart alarm-core
   depends_on: [mosquitto]
 
 services:
@@ -117,6 +118,12 @@ services:
     <<: *service
     profiles: [sim]
     command: [python, -m, alarm_sim, --broker, "mosquitto:1883", node, --node, door-1, --headless]
+    networks: [iot]
+
+  env-1:   # environment module: gas, temperature, humidity (config/modules.yaml)
+    <<: *service
+    profiles: [sim]
+    command: [python, -m, alarm_sim, --broker, "mosquitto:1883", node, --node, env-1, --headless]
     networks: [iot]
 
   # Segmentation check: a device on the house Wi-Fi tries to reach everything.

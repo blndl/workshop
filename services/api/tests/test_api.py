@@ -170,7 +170,8 @@ def test_sim_panel_drives_the_node():
         assert r.status_code == 202
         assert wait_for(lambda: client.get("/api/sim").json()["nodes"]["door-1"]["sensors"]["door"] == "1")
         assert wait_for(lambda: client.get("/api/state").json()["nodes"]["door-1"]["sensors"]["door"] == "1")
-        bad = [{"cmd": "shell"}, {"cmd": "set", "sensor": "window", "value": 1}, {"cmd": "jam", "seconds": 600}]
+        bad = [{"cmd": "shell"}, {"cmd": "set", "sensor": "Door!", "value": 1}, {"cmd": "jam", "seconds": 600},
+               {"cmd": "set", "sensor": "gas", "value": 1e9}]
         assert all(client.post("/api/sim/door-1/command", json=b).status_code == 422 for b in bad)
         assert client.post("/api/sim/..%2Fetc/command", json={"cmd": "jam", "seconds": 3}).status_code in (404, 422)
     house.stop()

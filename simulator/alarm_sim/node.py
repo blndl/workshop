@@ -27,13 +27,18 @@ from alarm_protocol import (
     verify_signed,
 )
 from alarm_protocol.hub import down_topic, status_topic, up_topic
+from alarm_protocol.modules import ModuleSpec, door_module
 
 FW_VERSION = "0.1.0-sim"
 HB_INTERVAL = 1.0
 HELLO_RETRY = 2.0
 DOWNLINK_TIMEOUT = 10.0
 
-SENSORS = ("door", "pir", "lid")
+
+
+def fmt(value: float) -> str:
+    """Numeric sensor value as sent on the wire (protocol field values: digits, '.', '-')."""
+    return f"{value:.1f}"
 
 
 class SimNode:
@@ -44,13 +49,18 @@ class SimNode:
         transport,
         rng: Callable[[int], bytes] = os.urandom,
         log: Callable[[str], None] = print,
+        module: ModuleSpec | None = None,
     ):
+        # Without a description, behave like the original door module.
+        self.module = module or door_module(node_id)
         self.node_id = node_id
         self.master = master
         self.transport = transport
         self.rng = rng
         self.log = log
-        self.sensors = {s: "0" for s in SENSORS}
+        # Numeric sensors drift around a setpoint (their 'normal' value until changed).
+        self._setpoint = {n: (s.normal or 0.0) for n, s in self.module.sensors.items() if not s.binary}
+        self.sensors = {n: ("0" if s.binary else fmt(self._setpoint[n])) for n, s in self.module.sensors.items()}
         self.outputs = {"buzzer": "0", "led": "off"}
         self.security_events: list[str] = []  # rejected downlink messages
         self.state = "offline"  # offline | handshaking | session | silent
@@ -95,11 +105,26 @@ class SimNode:
     # --- sensors --------------------------------------------------------
 
     def set(self, now: float, **values) -> None:
+        """Binary sensors: 0/1. Numeric sensors: the new reading (it then drifts around it)."""
         changed = {}
         for k, v in values.items():
-            if k not in self.sensors:
-                raise ValueError(f"unknown sensor {k!r}, expected one of {SENSORS}")
-            v = str(int(v))
+            spec = self.module.sensors.get(k)
+            if spec is None:
+                raise ValueError(f"unknown sensor {k!r}, expected one of {sorted(self.module.sensors)}")
+            if spec.binary:
+                try:
+                    on = float(v)
+                except (TypeError, ValueError):
+                    on = None
+                if on not in (0.0, 1.0):
+                    raise ValueError(f"{k} is on/off: use 0 or 1")
+                v = str(int(on))
+            else:
+                try:
+                    self._setpoint[k] = float(v)
+                except (TypeError, ValueError) as e:
+                    raise ValueError(f"{k} is numeric ({spec.unit or 'no unit'}): use a number") from e
+                v = fmt(self._setpoint[k])
             if self.sensors[k] != v:
                 self.sensors[k] = v
                 changed[k] = v
@@ -145,6 +170,8 @@ class SimNode:
                 self._heartbeat(now)
 
     def _heartbeat(self, now: float) -> None:
+        for name, target in self._setpoint.items():  # a little noise, like a real sensor
+            self.sensors[name] = fmt(target + self._rssi.uniform(-1, 1) * max(abs(target) * 0.01, 0.1))
         fields = dict(self.sensors)
         fields["up"] = str(max(0, int(now - self._boot_at)))
         fields["rssi"] = str(self._rssi.randint(-66, -55))

@@ -14,24 +14,30 @@ alarm_core/
 ## States
 
 ```
-DISARMED --arm--> ARMING --exit delay--> ARMED --door/pir--> ENTRY_DELAY --entry delay--> TRIGGERED
-   ^                                                                                         |
-   +----------------------------------- disarm (from any state) ----------------------------+
+DISARMED --arm--> ARMING --exit delay--> ARMED --entry sensor--> ENTRY_DELAY --entry delay--> TRIGGERED
+   ^                                                                                              |
+   +---------------------------------------- disarm (from any state) ----------------------------+
 ```
+
+Sensors are handled by the **role** their module description gives them (`config/modules.yaml`, see [docs/modules.md](../../docs/modules.md)), not by name:
 
 | Situation | What happens |
 |---|---|
-| `door` or `pir` goes to 1 while ARMED | ENTRY_DELAY (30 s by default) to type the code |
-| Entry delay runs out | TRIGGERED: siren on all nodes, LED `alarm` |
-| `lid` opened while not DISARMED | TRIGGERED immediately (tamper) |
-| `lid` opened while DISARMED | `tamper` event only, so the box can be opened for maintenance |
-| A node goes silent for 3 s while ARMING, ARMED or ENTRY_DELAY | TRIGGERED immediately (fail-secure: jamming, cut power, smashed node) |
+| `entry` sensor active while ARMED | ENTRY_DELAY (30 s by default) to type the code |
+| Entry delay runs out | TRIGGERED: siren on every module, LED `alarm` |
+| `instant` sensor active while ARMED or in ENTRY_DELAY | TRIGGERED immediately |
+| `tamper` sensor active while not DISARMED | TRIGGERED immediately |
+| `tamper` sensor active while DISARMED | `tamper` event only, so the box can be opened for maintenance |
+| `safety` sensor active (gas, smoke…), **in any state** | Safety alarm (`safety_alarm`): buzzers on until a code silences it (`safety_silenced`); stays listed until the reading is back to normal (`safety_clear`) |
+| A module goes silent for 3 s while ARMING, ARMED or ENTRY_DELAY | TRIGGERED immediately (fail-secure: jamming, cut power, smashed module) |
 | Siren on for 3 min | Siren stops (`siren_timeout`); the state stays TRIGGERED until disarmed |
-| Arming while a node is offline or a lid is open | Refused (`arm_refused`, with the reasons) |
+| Arming while a module is offline, a `tamper`/`instant` sensor is active, or a safety alarm is on | Refused (`arm_refused`, with the reasons) |
 | Duress code | Disarms exactly like the normal code, plus a silent `duress` event |
 | 5 wrong codes within 5 min | Every code refused for 5 min, even the right one (`code_lockout`) |
 
-Sensor activity during ARMING is ignored, so you can walk out through the door.
+Sensor activity during ARMING is ignored, so you can walk out through the door. Intrusion and safety alarms are independent: gas doesn't start an intrusion, and disarming doesn't make the gas go away.
+
+`--modules` picks the description file (default `config/modules.yaml`). alarm-core refuses to start if the file is invalid or a module has no key.
 
 ## Topics
 
@@ -40,7 +46,7 @@ Sensor activity during ARMING is ignored, so you can walk out through the door.
 | `alarm/v1/<node>/up` / `down` | nodes ↔ alarm-core | Encrypted protocol traffic ([spec](../../protocol/spec.md)) |
 | `alarm/control` | clients → alarm-core | `{"action": "arm"\|"disarm"\|"status", "code": "1234", "source": "cli", "req": "a1b2"}` |
 | `alarm/events` | alarm-core → services | One JSON event per message |
-| `alarm/state` | alarm-core → services | Retained snapshot, republished every second: state, reason, siren, countdown, and per node `online`, `sensors`, `rssi` (dBm), `uptime` (s), `seen_ago` (s), `security` (rejected messages by kind) |
+| `alarm/state` | alarm-core → services | Retained snapshot, republished every second: state, reason, siren, countdown, active `safety` alarms and `safety_silenced`, and per module `type`, `name`, `online`, `sensors` (latest values), `active`, `info` (each sensor's description), `rssi` (dBm), `uptime` (s), `seen_ago` (s), `security` (rejected messages by kind) |
 
 The internal topics are protected only by broker accounts (see [acl](../../infra/docker/mosquitto/acl)): the nodes and the dev `attacker` account can't reach them. On the Pi the broker isn't exposed beyond the Docker network and the IoT interface. This is a trust boundary to cover in the threat model.
 
@@ -51,7 +57,10 @@ Every event has `ts` (Unix time) and `type`. If it answers a control request, it
 | `type` | Fields | Meaning |
 |---|---|---|
 | `state` | `state`, `prev`, `reason`, `node`?, `delay`? | State changed (`delay` = seconds until the next automatic change) |
-| `sensor` | `node`, `sensor`, `value` | A sensor changed |
+| `sensor` | `node`, `sensor`, `value`, `active` | An on/off sensor changed, or a numeric one crossed its threshold (numeric readings themselves are in `alarm/state`) |
+| `safety_alarm` | `node`, `sensor`, `kind`, `value`, `unit`, `threshold` | A safety sensor became active |
+| `safety_silenced` | `source`, `alarms` | A code silenced the safety alarm(s) |
+| `safety_clear` | `node`, `sensor`, `value` | A safety sensor is back to normal |
 | `tamper` | `node`, `sensor` | Enclosure opened while disarmed |
 | `node_online` / `link_lost` | `node` | Node link came up / went silent for 3 s |
 | `security` | `node`, `kind` (`auth_fail`/`replay`), `detail` | Rejected forged or replayed message |

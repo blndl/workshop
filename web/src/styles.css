@@ -153,3 +153,26 @@ button.danger { background: var(--danger-bg); color: var(--danger); border-color
 .metrics-bar a { color: var(--info); font-size: 0.9rem; }
 .metrics-frame { width: 100%; height: calc(100vh - 120px); min-height: 600px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); }
 pre { background: var(--button); padding: 8px 12px; border-radius: 6px; }
+
+/* numeric readings */
+.readings { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.reading { display: flex; justify-content: space-between; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.reading > div { display: flex; flex-direction: column; gap: 2px; font-size: 0.85rem; }
+.reading strong { font-size: 1.1rem; }
+.reading.alarm { background: var(--danger-bg); border-color: transparent; }
+.reading.alarm strong { color: var(--danger); }
+.sensor.on.role-safety { background: var(--danger-bg); }
+.sensor.on.role-safety strong { color: var(--danger); }
+h3 .small { font-weight: 400; }
+
+/* safety alarm banner */
+.safety { border-top: 6px solid var(--danger); background: var(--danger-bg); display: flex; flex-direction: column; gap: 6px; animation: pulse 1s infinite; }
+.safety.silenced { animation: none; border-top-color: var(--warn); background: var(--warn-bg); }
+.safety-label { font-size: 1.4rem; font-weight: 800; color: var(--danger); }
+.safety.silenced .safety-label { color: var(--warn); }
+
+/* simulator numeric controls */
+.sim-row.numeric { display: grid; grid-template-columns: minmax(60px, 1fr) auto auto auto; gap: 6px; align-items: center; }
+.sim-row.numeric > * { flex: none; }
+.sim-reading { grid-column: 1 / -1; font-size: 0.85rem; }
+.sim-row input { width: 100%; min-width: 0; font: inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); }

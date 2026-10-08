@@ -20,6 +20,7 @@ import sys
 import time
 from pathlib import Path
 
+from alarm_protocol.modules import ModuleError, load as load_modules
 from alarm_protocol.transport import MqttTransport
 
 from .codes import CodeChecker, hash_code
@@ -30,6 +31,7 @@ from .service import CONTROL_TOPIC, EVENTS_TOPIC, STATE_TOPIC, AlarmService
 REPO = Path(__file__).resolve().parents[3]
 DEFAULT_SECRETS = REPO / ".secrets" / "dev.json"
 DEFAULT_LOG = REPO / "data" / "events.jsonl"
+DEFAULT_MODULES = REPO / "config" / "modules.yaml"
 
 
 def load_secrets(path: Path) -> dict:
@@ -49,17 +51,24 @@ def broker(args, secrets: dict) -> tuple[str, int]:
 def cmd_run(args) -> int:
     s = load_secrets(args.secrets)
     host, port = broker(args, s)
-    keys = {n: bytes.fromhex(v["key"]) for n, v in s["nodes"].items()}
+    try:
+        modules = load_modules(args.modules).modules
+    except ModuleError as e:
+        sys.exit(f"{args.modules}: {e}")
+    missing = [m for m in modules if m not in s["nodes"]]
+    if missing:
+        sys.exit(f"no key for module(s) {', '.join(missing)}: run scripts/dev-secrets.sh, then restart the broker")
+    keys = {m: bytes.fromhex(s["nodes"][m]["key"]) for m in modules}
     codes = CodeChecker(s["codes"]["user"], s["codes"]["duress"])
     timing = Timing(args.exit_delay, args.entry_delay, args.siren_max)
-    machine = AlarmMachine(list(keys), codes, timing, now=time.monotonic())
+    machine = AlarmMachine(modules, codes, timing, now=time.monotonic())
     transport = MqttTransport(host, port, "hub", s["hub"]["password"], client_id="alarm-core")
     eventlog = EventLog(args.log, bytes.fromhex(s["log_key"]))
     check = eventlog.startup_check
     print(f"[alarm] event log {args.log}: {check.count} records, " + ("chain OK" if check.ok else f"{len(check.problems)} PROBLEM(S)"))
     service = AlarmService(keys, machine, transport, eventlog=eventlog)
     service.start()
-    print(f"[alarm] connected to {host}:{port}, nodes: {', '.join(keys)}")
+    print(f"[alarm] connected to {host}:{port}, modules: " + ", ".join(f"{m} ({modules[m].type})" for m in modules))
     print(f"[alarm] exit delay {timing.exit_delay:g}s, entry delay {timing.entry_delay:g}s, siren max {timing.siren_max:g}s")
     try:
         while True:
@@ -200,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--entry-delay", type=float, default=30.0)
     r.add_argument("--siren-max", type=float, default=180.0)
     r.add_argument("--log", type=Path, default=DEFAULT_LOG)
+    r.add_argument("--modules", type=Path, default=DEFAULT_MODULES, help="module descriptions (config/modules.yaml)")
 
     c = sub.add_parser("ctl", help="send a control request")
     c.add_argument("action", choices=["arm", "disarm", "status"])

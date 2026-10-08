@@ -1,6 +1,6 @@
 # simulator
 
-Fake ESP8266 sensor nodes that speak [protocol v1](../protocol/spec.md) over MQTT, plus an attacker and a minimal dev hub. Use it to develop and test everything on the Pi side before the hardware exists.
+Fake ESP8266 sensor nodes that speak [protocol v1](../protocol/spec.md) over MQTT, plus an attacker and a minimal dev hub. Use it to develop and test the whole core before (or without) the hardware.
 
 ```
 alarm_sim/
@@ -44,9 +44,11 @@ Then, in two terminals:
 .venv/bin/python -m alarm_sim node                       # terminal 2: interactive node
 ```
 
+The node builds its sensors from its entry in `config/modules.yaml` (`--modules` for another file); a node that isn't described there simulates the original door module. On/off sensors start at 0. Numeric ones start at their `normal` value and drift a little every heartbeat; `gas 650` or the dashboard's **Alarm** button pushes one past its threshold.
+
 With `--headless` the node takes no terminal input and is driven from the dashboard's simulator panel instead (see [web/README.md](../web/README.md)). Either way, it listens on the dev-only topic `sim/<node>/cmd` and reports on `sim/<node>/status` ([control.py](alarm_sim/control.py)).
 
-Node commands: `door 1`, `pir 1`, `lid 1`, `jam 6`, `reboot`, `attack replay`, `attack spoof`, `attack inject_cmd`, `status`, `help`. In the hub terminal: `cmd door-1 buzzer=1`.
+Node commands: `<sensor> <value>` (door module: `door 1`, `pir 1`, `lid 1`; environment module: `gas 650`, `temp 21`), `jam 6`, `reboot`, `attack replay`, `attack spoof`, `attack inject_cmd`, `status`, `help`. In the hub terminal: `cmd door-1 buzzer=1`.
 
 To play a scenario live instead: `.venv/bin/python -m alarm_sim node --scenario simulator/scenarios/jamming.yaml`.
 

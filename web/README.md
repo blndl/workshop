@@ -8,13 +8,14 @@ src/
   api.ts, types.ts     API client and response shapes
   usePoll.ts           refresh every N ms
   format.ts            event descriptions, durations
+  sensors.ts           how to display a sensor from its description
   components/
-    StatusPanel        state, countdown, siren, log size
+    StatusPanel        safety-alarm banner, state, countdown, siren, log size
     Keypad             arm / disarm with a code
-    NodeCard           sensors, Wi-Fi signal chart, uptime, rejected messages
+    NodeCard           one module, from its description: on/off tiles, numeric readings + charts, link
     Metrics            counts of alarms, attacks, link losses, wrong codes, photos
     Timeline           recent events, coloured by severity
-    SimPanel           DEV ONLY: drive the simulated ESPs, see their LED and buzzer
+    SimPanel           DEV ONLY: drive the simulated modules (any sensor), see their LED and buzzer
     MetricsTab         the Metrics tab: Grafana embedded (needs the monitoring profile)
 ```
 
@@ -25,7 +26,8 @@ Start the backend (from the repo root, broker running):
 ```bash
 .venv/bin/python -m alarm_core run --exit-delay 5 --entry-delay 10
 .venv/bin/python -m alarm_api --sim                          # --sim shows the simulator panel
-.venv/bin/python -m alarm_sim node --node door-1 --headless  # one per simulated node
+.venv/bin/python -m alarm_sim node --node door-1 --headless  # one per module in config/modules.yaml
+.venv/bin/python -m alarm_sim node --node env-1 --headless
 ```
 
 Then either:
@@ -37,11 +39,11 @@ cd web && npm run dev                     # live reload on http://localhost:5173
 
 `npm run dev` forwards `/api` to the API on port 8000.
 
-One ESP carries all the sensors (door, motion, lid), so one simulated node is enough. Only add a node for sensors far away from the first board: `scripts/dev-secrets.sh door-1 <name>`, then restart the broker and alarm-core, and start `alarm_sim node --node <name>`.
+Module cards and simulator controls are drawn from each module's description (`info` in `/api/state`): on/off tiles for binary sensors, readings with their limit and a chart for numeric ones, and a safety-alarm banner. A new module needs no front-end change ([docs/modules.md](../docs/modules.md)).
 
 ## Simulator panel
 
-Shown only when the API runs with `--sim`. For each simulated node: open/close the door and lid, trigger motion, jam the Wi-Fi for 6 s, reboot, and launch any of the 8 attacks. The fake device's LED and buzzer show what alarm-core commands it to do.
+Shown only when the API runs with `--sim`. For each simulated module: flip its on/off sensors, set numeric readings (or jump to **Normal** / **Alarm**), jam the Wi-Fi for 6 s, reboot, and launch any of the 8 attacks. The fake device's LED and buzzer show what alarm-core commands it to do.
 
 It works through dev-only MQTT topics (`sim/<node>/cmd` and `sim/<node>/status`, see `simulator/alarm_sim/control.py`). A real ESP has no such channel; remove the `sim/` lines from the broker ACL on a real deployment.
 
